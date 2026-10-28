@@ -7,7 +7,7 @@ from ..models import Application, GeneratedMaterial, Job, UserProfile
 from ..schemas import GENERATION_KINDS, GenerationRequest, GenerationResult
 from ..services import pdf as pdf_service
 from ..services import generate_material
-from ..services.assistant import cv_for_pdf
+from ..services.assistant import cv_for_pdf, review_copy, unmark_suggestions
 from .deps import get_job_or_404
 from .auth import get_current_profile
 
@@ -36,12 +36,21 @@ def cv_pdf(job_id: int, marked: bool = Query(True), db: Session = Depends(get_db
     """The CV written for this one ad, as a PDF — no tracker entry needed to get it.
 
     ``marked`` (the default) is the copy he reviews: additions the assistant suggested
-    for this ad are drawn red and underlined. ``marked=False`` is the ATS copy, where
-    those lines are removed rather than just uncoloured.
+    for this ad are drawn red and underlined. ``marked=False`` is the copy for the
+    employer: the same additions, brackets and review notes removed.
+
+    When this ad already has a CV draft, that reviewed text is what gets rendered —
+    regenerating on every download is how the two copies could disagree.
     """
     job = get_job_or_404(db, job_id, profile.id)
-    return Response(pdf_service.render_text_pdf(cv_for_pdf(job, profile, marked=marked),
-                                                name_line=True, title=f"CV - {job.title}"),
+    row = (db.query(GeneratedMaterial)
+           .filter(GeneratedMaterial.job_id == job_id, GeneratedMaterial.kind == "cv")
+           .order_by(GeneratedMaterial.created_at.desc()).first())
+    if row is None:
+        content = cv_for_pdf(job, profile, marked=marked)
+    else:
+        content = review_copy(row.content) if marked else unmark_suggestions(row.content)
+    return Response(pdf_service.render_text_pdf(content, name_line=True, title=f"CV - {job.title}"),
                     media_type="application/pdf")
 
 

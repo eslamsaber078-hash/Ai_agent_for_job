@@ -92,7 +92,7 @@ export function PackDialog({ pack, onClose, onChanged }: {
       toast(
         marked
           ? t("Review copy saved — the lines the assistant added are printed in red")
-          : t("Send copy saved — every line the assistant added is removed, not just uncoloured")
+          : t("Send copy saved — the added lines are printed in black, without the red marks")
       );
     } catch (e: any) {
       toast(e.message, "error");
@@ -189,7 +189,7 @@ export function PackDialog({ pack, onClose, onChanged }: {
                       size="sm"
                       onClick={() => savePdf(false)}
                       disabled={savingPdf !== null}
-                      title={t("Download the ATS-safe copy for the employer — suggested lines are deleted, and no internal notes are inside")}
+                      title={t("Download the copy for the employer — the red marks are gone and the added lines stay as normal text")}
                     >
                       {savingPdf === "clean" ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -222,7 +222,7 @@ export function PackDialog({ pack, onClose, onChanged }: {
 
             {isCv && added.length > 0 && (
               <p className="text-[11px] leading-relaxed text-red-700 dark:text-red-400">
-                {added.join(" · ")} {t("— these are the red lines above. They are not in your CV yet, so delete every one you cannot back up before the clean copy goes out.")}
+                {added.join(" · ")} {t("— these are the lines the assistant added above. Check every one you cannot back up before the clean copy goes out — it prints them in black.")}
               </p>
             )}
 
@@ -231,7 +231,7 @@ export function PackDialog({ pack, onClose, onChanged }: {
               <Link to="/profile" className="font-medium text-primary underline underline-offset-2">
                 {t("Resume & Profile")}
               </Link>
-              {t(". Red lines are the assistant's suggestions for this ad, and the clean PDF deletes them entirely. Read it, fix what is yours to fix, then apply yourself — nothing here is sent for you.")}
+              {t(". Red lines are the assistant's additions for this ad; the clean PDF prints them in black without the marks. Read it, confirm what you can back up, then apply yourself — nothing here is sent for you.")}
             </p>
           </>
         )}

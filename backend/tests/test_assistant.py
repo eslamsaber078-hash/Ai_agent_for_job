@@ -336,23 +336,36 @@ def test_the_review_cv_adds_the_missing_requirement_marked_red():
     assert "RED ITEMS ARE SUGGESTIONS" in text
 
 
-def test_the_clean_cv_drops_every_unconfirmed_addition():
-    from app.services.assistant import SUGGESTION_HEADING, cv_for_pdf
+def test_the_clean_cv_keeps_the_addition_and_drops_only_the_marks(monkeypatch):
+    from app.services import assistant as mod
     job, profile = _cv_job_profile()
-    clean = cv_for_pdf(job, profile, marked=False)
-    assert "[[" not in clean
-    assert "REST" not in clean.upper()
-    assert SUGGESTION_HEADING not in clean
+    ai_cv = ("ESLAM SABER\ne@example.com\n\nPROFESSIONAL SUMMARY\nFlutter developer who ships mobile "
+             "apps end to end and keeps the release flow simple.\n\nSKILLS\n- Flutter\n- [[REST APIs]]")
+    monkeypatch.setattr(mod.ai, "ai_available", lambda: True)
+    monkeypatch.setattr(mod.ai, "chat_text", lambda *a, **k: ai_cv)
+    mod._CV_AI_CACHE.clear()
+    marked = mod.cv_for_pdf(job, profile, marked=True)
+    clean = mod.cv_for_pdf(job, profile, marked=False)
+    mod._CV_AI_CACHE.clear()
+    assert "[[REST APIs]]" in marked
+    assert "[[" not in clean and "]]" not in clean
+    assert "REST APIs" in clean  # the tailoring survives, just without the mark
+    assert mod.SUGGESTION_HEADING not in clean
     assert "RED ITEMS" not in clean
-    assert "Flutter" in clean  # what he really has stays
+    assert "Flutter" in clean
 
 
-def test_a_line_that_only_carried_a_suggestion_is_removed_whole():
-    from app.services.assistant import strip_suggestions
-    text = "SKILLS\n- Flutter\n- [[REST APIs]]\n\nEXPERIENCE\nFlutter, [[Dart]], Dart"
-    out = strip_suggestions(text)
-    assert "- [[REST" not in out and "- REST" not in out
-    assert "Flutter, Dart" in out  # the comma left behind by a cut is tidied
+def test_a_line_that_only_carried_a_suggestion_keeps_its_words_unmarked():
+    from app.services.assistant import unmark_suggestions
+    text = "SKILLS\n- Flutter\n- [[REST APIs]]\n\nEXPERIENCE\nFlutter, [[Dart]], Dart\n\n" \
+           "SUGGESTED FOR THIS AD - CONFIRM BEFORE SENDING\n- [[REST APIs]]\n\nEDUCATION\nBSc"
+    out = unmark_suggestions(text)
+    assert "- REST APIs" in out
+    assert "[[" not in out and "]]" not in out
+    assert "Flutter, Dart, Dart" in out
+    # The suggestion list was never part of the CV, so it does not ship in the send copy.
+    assert "SUGGESTED FOR THIS AD" not in out
+    assert "EDUCATION\nBSc" in out
 
 
 def test_an_ai_that_brackets_twelve_skills_is_cut_back_to_eight(client, monkeypatch):
@@ -377,7 +390,10 @@ def test_an_ai_that_brackets_twelve_skills_is_cut_back_to_eight(client, monkeypa
     for dropped in ("Tool 9", "Tool 10", "Tool 11", "Tool 12"):
         assert dropped not in marked
     assert "Tool 1" in marked and "[[" in marked
-    assert "[[" not in clean and "Tool" not in clean
+    # The send copy keeps the capped additions as plain text — no brackets, no legend.
+    assert "[[" not in clean
+    assert "Tool 1" in clean
+    assert "Tool 12" not in clean
     assert "Flutter" in clean and "RED ITEMS" not in clean
 
 

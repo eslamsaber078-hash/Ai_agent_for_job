@@ -91,14 +91,14 @@ export function JobDetailDialog({
     navigate(`/assistant?job=${job.id}`);
   };
 
-  /** The clean, ATS-safe CV for this ad — no pack and no tracker entry needed. */
+  /** The clean CV for this ad — no pack and no tracker entry needed. */
   const downloadCv = async () => {
     const jobId = job.id;
     setSavingCv(true);
     try {
       const blob = await api.downloadPdf(`/api/assistant/cv/${jobId}/pdf${qs({ marked: false })}`);
       saveBlob(blob, fileName("CV", job.title, job.company));
-      toast(t("CV PDF saved — it holds only what your profile proves"));
+      toast(t("CV PDF saved — the tailored copy, without the red marks"));
     } catch (e: any) {
       toast(e.message, "error");
     } finally {

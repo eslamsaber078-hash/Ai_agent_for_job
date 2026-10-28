@@ -73,21 +73,48 @@ def _limit_suggestions(text: str, limit: int = MAX_SUGGESTIONS) -> str:
     return "\n".join(lines)
 
 
-def strip_suggestions(text: str) -> str:
-    """The send-clean copy: additions gone, brackets never leaking to a parser."""
-    lines = []
-    for line in (text or "").split("\n"):
-        if line.strip() == SUGGESTION_HEADING or line.strip().startswith("RED ITEMS ARE SUGGESTIONS"):
-            continue
-        if not _SUGGESTED_RE.search(line):
-            lines.append(line)
-            continue
-        cleaned = re.sub(r",\s*,", ", ", _SUGGESTED_RE.sub("", line))
-        cleaned = re.sub(r"[ \t]+", " ", cleaned).rstrip(" ,;")
-        if cleaned.strip(" -•\t"):
-            lines.append(cleaned)
-    body = "\n".join(lines)
+def review_copy(text: str) -> str:
+    """The document for his eyes: internal checklists and build warnings removed.
+
+    The stored material carries the gap checklist and a review reminder for the screen.
+    They are meant for him, not for a PDF that may reach an employer, so both copies
+    cut them — the review copy keeps only the red legend.
+    """
+    body = text or ""
+    for marker in ("WHAT THIS AD ASKS FOR", REVIEW_REMINDER,
+                   "Generated with templates because", "Generated from your real profile data"):
+        if marker in body:
+            body = body.split(marker)[0]
     return re.sub(r"\n{3,}", "\n\n", body).strip()
+
+
+def unmark_suggestions(text: str) -> str:
+    """The send copy: the same CV, with the suggested additions printed as plain text.
+
+    The addition keeps its words and loses only the brackets and the review furniture —
+    the legend, the separate suggestion list and the reminders are cut, so the document
+    the employer receives reads as one ordinary CV. He reviews the marked copy first;
+    this one is never generated on its own, only derived from that reviewed document.
+    """
+    body = review_copy(text)
+    lines = []
+    skipping = False
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped == SUGGESTION_HEADING:
+            skipping = True
+            continue
+        if stripped.startswith("RED ITEMS ARE SUGGESTIONS"):
+            continue
+        if skipping:
+            if not stripped or stripped.startswith("- "):
+                continue
+            skipping = False
+        cleaned = _SUGGESTED_RE.sub(lambda m: m.group(1), line)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned).rstrip()
+        lines.append(cleaned)
+    result = "\n".join(lines)
+    return re.sub(r"\n{3,}", "\n\n", result).strip()
 
 
 def _word_set(name: str) -> frozenset:
@@ -581,13 +608,14 @@ def _cv_pack(job: Job, f: dict, marked: bool, ai_text: str | None = None) -> str
 
     ``marked`` puts every requirement this ad wants that his data cannot show into the
     skills block as a bracketed suggestion, which the PDF renderer draws red and
-    underlined. ``marked=False`` deletes those lines entirely, so a copy that leaves the
-    house can only ever contain what he actually entered.
+    underlined. ``marked=False`` keeps those same additions, bracketed text unwrapped
+    and the legend cut, so the employer's copy carries the tailoring but none of the
+    review marks — he decides himself what to stand behind before sending it.
     """
     body = (ai_text if ai_text is not None else _cv_ai(job, f)) or _cv(job, f, include_gaps=False)
-    if not marked:
-        return strip_suggestions(body)
     body = _limit_suggestions(body)
+    if not marked:
+        return unmark_suggestions(body)
     already = {item.casefold() for item in suggested_items(body)}
     items = [gap for gap in _unproven_requirements(job, f)
              if gap.casefold() not in already][:max(0, MAX_SUGGESTIONS - len(already))]
@@ -605,7 +633,8 @@ def cv_for_pdf(job: Job, profile: UserProfile | None, marked: bool = True) -> st
 
     ``marked`` (the default) is the copy he reviews before sending: the ad's missing
     requirements sit in the skills block in red with the legend that says they are
-    suggestions. ``marked=False`` is the ATS copy for an employer.
+    suggestions. ``marked=False`` is the copy for an employer: the same text without
+    the brackets, the legend or the review notes.
     """
     return _cv_pack(job, _facts(job, profile), marked)
 

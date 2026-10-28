@@ -12,7 +12,8 @@ from ..schemas import (ApplicationIn, ApplicationOut, ApplicationUpdate,
                        PreparedApplication, PreparedMaterial, PrepareIn, STATUSES)
 from ..services import pdf as pdf_service
 from ..services.apply_method import apply_method
-from ..services.assistant import cv_for_pdf, generate_material, strip_suggestions
+from ..services.assistant import (cv_for_pdf, generate_material, review_copy,
+                                  unmark_suggestions)
 from .deps import get_job_or_404, job_to_out, jobs_to_out
 from .auth import get_current_profile
 
@@ -166,24 +167,28 @@ def material_pdf(app_id: int, kind: str, marked: bool = Query(True),
 
     ``marked`` (the default) is the review copy: the skills this ad wants that his CV
     cannot show are drawn red and underlined so he sees exactly what to confirm or cut.
-    ``marked=False`` is the ATS copy — those lines are gone, not just uncoloured.
-    Either way the internal checklist of gaps never reaches the document.
+    ``marked=False`` is the copy for the employer: the same additions, brackets and
+    review notes removed, so it reads as one ordinary CV.
+
+    The CV PDF is rendered from the material he already reviewed on screen — rebuilding
+    it here used to write a fresh (and sometimes template-fallback) document, which is
+    how a download could come back as his plain CV while the other carried the changes.
 
     No Content-Disposition header here: Chrome rejects a CORS fetch whose response
     carries "attachment", and the browser names the file itself when it saves the blob.
     """
     app = _get_app_or_404(db, app_id, profile.id)
-    if kind == "cv":
+    row = (db.query(GeneratedMaterial)
+           .filter(GeneratedMaterial.application_id == app_id,
+                   GeneratedMaterial.kind == kind).first())
+    if row is None:
+        if kind != "cv":
+            raise HTTPException(status_code=404, detail="This document has not been prepared yet")
         content = cv_for_pdf(app.job, profile, marked=marked)
         name_line = True
     else:
-        row = (db.query(GeneratedMaterial)
-               .filter(GeneratedMaterial.application_id == app_id,
-                       GeneratedMaterial.kind == kind).first())
-        if row is None:
-            raise HTTPException(status_code=404, detail="This document has not been prepared yet")
-        content = row.content if marked else strip_suggestions(row.content)
-        name_line = False
+        content = review_copy(row.content) if marked else unmark_suggestions(row.content)
+        name_line = kind == "cv"
     return Response(pdf_service.render_text_pdf(content, name_line=name_line,
                                                 title=f"{kind} - {app.job.title}"),
                     media_type="application/pdf")

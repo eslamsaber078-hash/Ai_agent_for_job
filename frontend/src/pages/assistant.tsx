@@ -155,8 +155,7 @@ export function AssistantPage() {
   };
 
   /** The CV written for this ad, as a PDF. ``marked`` keeps the red additions for his
-   *  own review; the clean copy has them deleted, so what leaves the house is only what
-   *  his profile proves. */
+   *  own review; the clean copy prints them in black, with no marks and no notes. */
   const saveCvPdf = async (marked: boolean) => {
     if (jobId === "") {
       toast(t("Select a job first"), "error");
@@ -170,7 +169,7 @@ export function AssistantPage() {
       toast(
         marked
           ? t("Review copy saved — the lines the assistant added are printed in red")
-          : t("Send copy saved — every line the assistant added is removed, not just uncoloured")
+          : t("Send copy saved — the added lines are printed in black, without the red marks")
       );
     } catch (e: any) {
       toast(e.message, "error");
@@ -360,7 +359,7 @@ export function AssistantPage() {
                           size="sm"
                           onClick={() => saveCvPdf(false)}
                           disabled={savingPdf !== null}
-                          title={t("The ATS-safe copy for the employer: suggested lines are deleted, internal notes never included")}
+                          title={t("The copy for the employer: no red marks, no internal notes, and the added lines stay as normal text")}
                         >
                           {savingPdf === "clean" ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />

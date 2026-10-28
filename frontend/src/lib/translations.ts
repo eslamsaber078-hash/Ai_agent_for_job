@@ -147,8 +147,8 @@ export const AR: Record<string, string> = {  // topbar
   "Save job": "احفظ الوظيفة",
   "Removed from saved jobs": "اتشالت من الوظايف المحفوظة",
   "Job saved": "الوظيفة اتحفظت",
-  "CV PDF saved — it holds only what your profile proves":
-    "اتحفظ CV PDF — فيه بس الحاجات اللي ملفك بيثبتها",
+  "CV PDF saved — the tailored copy, without the red marks":
+    "اتحفظ CV PDF — النسخة المخصصة، من غير العلامات الحمرا",
   "Type not specified": "النوع مش محدد",
   "Level not specified": "السنين مش محددة",
   "No longer advertised by {board}": "مبقتش معلنة على {board}",
@@ -203,18 +203,18 @@ export const AR: Record<string, string> = {  // topbar
   "Download the copy you check before sending — additions the assistant suggested are printed in red":
     "نزّل النسخة اللي بتراجعها قبل الإرسال — الإضافات اللي اقترحها المساعد مكتوبة بالأحمر",
   "CV PDF with red marks": "CV PDF بعلامات حمرا",
-  "Download the ATS-safe copy for the employer — suggested lines are deleted, and no internal notes are inside":
-    "نزّل النسخة الآمنة لـATS لصاحب الشغل — السطور المقترحة اتمسحت، ومفيش ملاحظات داخلية جواها",
+  "Download the copy for the employer — the red marks are gone and the added lines stay as normal text":
+    "نزّل النسخة اللي بتروح لصاحب الشغل — العلامات الحمرا اتشالت والسطور المضافة فضلت نص عادي",
   "Clean CV PDF": "CV PDF نضيف",
   "Save .md": "احفظ .md",
   Rebuild: "ابني من جديد",
   "This document came back empty — rebuild the pack.": "المستند ده رجع فاضي — ابني الباك من جديد.",
-  "— these are the red lines above. They are not in your CV yet, so delete every one you cannot back up before the clean copy goes out.":
-    "— دول السطور الحمرا فوق. مش في الـCV بتاعك لسه، فامسح أي واحد فيهم مش قادر تثبته قبل ما النسخة النضيفة تتبعت.",
+  "— these are the lines the assistant added above. Check every one you cannot back up before the clean copy goes out — it prints them in black.":
+    "— دي السطور اللي المساعد ضافها فوق. راجع أي واحد فيهم مش قادر تثبته قبل ما النسخة النضيفة تطلع — النسخة دي بتطبعهم بالأسود.",
   "Every line without a red mark comes straight from what you entered in":
     "كل سطر من غير علامة حمرا جاي مباشرة من اللي كتبته في",
-  ". Red lines are the assistant's suggestions for this ad, and the clean PDF deletes them entirely. Read it, fix what is yours to fix, then apply yourself — nothing here is sent for you.":
-    ". السطور الحمرا دي اقتراحات المساعد للإعلان ده، والـPDF النضيف بيمسحها خالص. اقراه، وعدّل اللي ليك، وبعدها قدّم بنفسك — مفيش حاجة هنا بتتبعت عنك.",
+  ". Red lines are the assistant's additions for this ad; the clean PDF prints them in black without the marks. Read it, confirm what you can back up, then apply yourself — nothing here is sent for you.":
+    ". السطور الحمرا دي إضافات المساعد للإعلان ده، والـPDF النضيف بيطبعها بالأسود من غير العلامات. اقراه، واتأكد من اللي تقدر تثبته، وبعدها قدّم بنفسك — مفيش حاجة هنا بتتبعت عنك.",
   "{count} documents prepared for this ad": "{count} مستند متجهزين للإعلان ده",
   "{count} docs": "{count} مستندات",
   "Write the CV, letter, email, questions and keywords for this ad":
@@ -405,8 +405,8 @@ export const AR: Record<string, string> = {  // topbar
   "Material deleted": "المستند اتشال",
   "Review copy saved — the lines the assistant added are printed in red":
     "نسخة المراجعة اتحفظت — السطور اللي المساعد ضافها مطبوعة بالأحمر",
-  "Send copy saved — every line the assistant added is removed, not just uncoloured":
-    "نسخة الإرسال اتحفظت — كل سطر ضافه المساعد اتشال، مش بس اتشال لونه",
+  "Send copy saved — the added lines are printed in black, without the red marks":
+    "نسخة الإرسال اتحفظت — السطور اللي المساعد ضافها مطبوعة بالأسود، من غير العلامات الحمرا",
   "AI Application Assistant": "مساعد التقديمات الذكي",
   "Generate tailored materials from your real profile only — nothing is invented, and nothing is sent for you.":
     "ولّد مستندات مخصوصة من بروفايلك الحقيقي بس — مفيش حاجة بتتألف، ومفيش حاجة بتتبعت عنك.",
@@ -437,8 +437,8 @@ export const AR: Record<string, string> = {  // topbar
   "Editable before you use it": "تقدر تعدّله قبل ما تستخدمه",
   "The copy you check first: additions the assistant suggested for this ad are printed red":
     "النسخة اللي بتراجعها الأول: الإضافات اللي المساعد اقترحها للإعلان ده مطبوعة بالأحمر",
-  "The ATS-safe copy for the employer: suggested lines are deleted, internal notes never included":
-    "النسخة الآمنة لصاحب الشغل: السطور المقترحة متشالة، والملاحظات الداخلية عمرها ما بتتضمن",
+  "The copy for the employer: no red marks, no internal notes, and the added lines stay as normal text":
+    "النسخة اللي بتروح لصاحب الشغل: مفيش علامات حمرا ولا ملاحظات داخلية، والسطور المضافة بتفضل نص عادي",
   "Export .txt": "صدّر .txt",
   "Regenerate": "ولّد تاني",
   "Edit the text": "عدّل النص",
