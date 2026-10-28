@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { api, qs } from "@/lib/api";
 import { type Job, type JobPage, type JobSourceSite, sourceLabel } from "@/lib/types";
+import { useI18n } from "@/context/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -47,6 +48,7 @@ function FilterLabel({ children }: { children: React.ReactNode }) {
 
 export function FindJobsPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [items, setItems] = useState<Job[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [filters, setFilters] = useState<Filters>({ levels: [], employment_types: [], sources: [] });
@@ -155,11 +157,13 @@ export function FindJobsPage() {
         if (line) setImportLog((prev) => [...prev, line]);
       });
       if (ev.type === "done") {
-        const label = name ? sourceLabel(name) : "all ticked sources";
+        const label = name ? sourceLabel(name) : t("all ticked sources");
         toast(
           (ev.jobs_new ?? 0) > 0
-            ? `${label}: ${ev.jobs_new} new job${ev.jobs_new === 1 ? "" : "s"} imported`
-            : `${label}: nothing new — every live posting is already in your database`
+            ? ev.jobs_new === 1
+              ? t("{label}: {count} new job imported", { label, count: ev.jobs_new ?? 0 })
+              : t("{label}: {count} new jobs imported", { label, count: ev.jobs_new ?? 0 })
+            : t("{label}: nothing new — every live posting is already in your database", { label })
         );
         setImportLog((ev.log ?? "").split("\n"));
         // Pressing a site button means "show me this site" too: filter the list to it.
@@ -188,10 +192,10 @@ export function FindJobsPage() {
     try {
       if (job.saved) {
         await api.delete(`/api/jobs/${job.id}/save`);
-        toast("Removed from saved jobs");
+        toast(t("Removed from saved jobs"));
       } else {
         await api.post(`/api/jobs/${job.id}/save`);
-        toast("Job saved");
+        toast(t("Job saved"));
       }
       // Immutable patch: the card object is shared with the dialog, so it must
       // never be mutated in place.
@@ -203,18 +207,18 @@ export function FindJobsPage() {
       savingRef.current.delete(job.id);
       setSavingIds(new Set(savingRef.current));
     }
-  }, [toast]);
+  }, [t, toast]);
 
   const track = useCallback(async (job: Job) => {
     try {
       await api.post("/api/applications", { job_id: job.id, status: "Discovered" });
-      toast("Added to the Applications Desk");
+      toast(t("Added to the Applications Desk"));
       setItems((xs) => xs.map((x) => (x.id === job.id ? { ...x, application_status: "Discovered" } : x)));
       setSelected((cur) => (cur && cur.id === job.id ? { ...cur, application_status: "Discovered" } : cur));
     } catch (e: any) {
       toast(e.message, "error");
     }
-  }, [toast]);
+  }, [t, toast]);
 
   const openJob = useCallback((job: Job) => setSelected(job), []);
 
@@ -246,25 +250,39 @@ export function FindJobsPage() {
 
   const activeFilters = [
     q && { key: "q", label: `“${q}”`, clear: () => setQ("") },
-    skill && { key: "skill", label: `Skill: ${skill}`, clear: () => setSkill("") },
-    location && { key: "location", label: `Location: ${location}`, clear: () => setLocation("") },
-    level && { key: "level", label: level, clear: () => setLevel("") },
-    empType && { key: "type", label: empType, clear: () => setEmpType("") },
+    skill && { key: "skill", label: t("Skill: {skill}", { skill }), clear: () => setSkill("") },
+    location && { key: "location", label: t("Location: {location}", { location }), clear: () => setLocation("") },
+    level && { key: "level", label: t(level), clear: () => setLevel("") },
+    empType && { key: "type", label: t(empType), clear: () => setEmpType("") },
     source && { key: "source", label: sourceLabel(source), clear: () => setSource("") },
-    remote && { key: "remote", label: remote === "true" ? "Remote only" : "Onsite only", clear: () => setRemote("") },
+    remote && { key: "remote", label: t(remote === "true" ? "Remote only" : "Onsite only"), clear: () => setRemote("") },
   ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
 
   return (
     <div className="animate-fade-in space-y-5">
       <PageHeader
-        eyebrow="Job database"
-        title="Find Jobs"
+        eyebrow={t("Job database")}
+        title={t("Find Jobs")}
         description={
           total === null
-            ? "Searching your job database…"
+            ? t("Searching your job database…")
             : hasFilters
-              ? `${total} ${showStale ? "postings" : "live postings"} match your filters${source ? ` on ${sourceLabel(source)}` : ""}${dbLive > total ? ` · ${dbLive} live across all sites` : ""}`
-              : `${total} ${showStale ? "postings" : "live postings"} in your database${dbLive > total ? ` · ${dbLive} live across all sites` : ""}`
+              ? t(
+                  showStale
+                    ? source
+                      ? "{count} postings on {source} match your filters"
+                      : "{count} postings match your filters"
+                    : source
+                      ? "{count} live postings on {source} match your filters"
+                      : "{count} live postings match your filters",
+                  { count: total, source: source ? sourceLabel(source) : "" }
+                ) + (dbLive > total ? t(" · {count} live across all sites", { count: dbLive }) : "")
+              : t(
+                  showStale
+                    ? "{count} postings in your database"
+                    : "{count} live postings in your database",
+                  { count: total }
+                ) + (dbLive > total ? t(" · {count} live across all sites", { count: dbLive }) : "")
         }
         actions={
           <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-border/80 bg-card px-3 text-xs font-medium text-muted-foreground shadow-soft transition-colors hover:text-foreground">
@@ -274,7 +292,7 @@ export function FindJobsPage() {
               checked={showStale}
               onChange={(e) => { setShowStale(e.target.checked); setPage(1); }}
             />
-            Show pulled postings
+            {t("Show pulled postings")}
           </label>
         }
       />
@@ -282,14 +300,14 @@ export function FindJobsPage() {
       <Card>
         <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0 pb-4">
           <div className="space-y-1.5">
-            <CardTitle>Import jobs</CardTitle>
+            <CardTitle>{t("Import jobs")}</CardTitle>
             <CardDescription>
-              One site at a time keeps each server light — the number is how many live postings that site has given you so far.
+              {t("One site at a time keeps each server light — the number is how many live postings that site has given you so far.")}
             </CardDescription>
           </div>
           <Button size="sm" variant="secondary" disabled={importing !== null} onClick={() => importSite(null)}>
             <RefreshCw className={cn("h-4 w-4", importing === "all" && "animate-spin")} />
-            {importing === "all" ? "Importing…" : "Import all ticked sites"}
+            {importing === "all" ? t("Importing…") : t("Import all ticked sites")}
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -302,21 +320,21 @@ export function FindJobsPage() {
                   type="button"
                   disabled={importing !== null}
                   onClick={() => importSite(s.name)}
-                  title={`${s.label} — import only from this site`}
+                  title={`${sourceLabel(s.name)} — ${t("import only from this site")}`}
                   className={cn(
-                    "group flex min-w-0 items-center gap-3 border-b border-border/60 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+                    "group flex min-w-0 items-center gap-3 border-b border-border/60 py-2.5 text-start transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
                     busy && "bg-muted/50"
                   )}
                 >
                   <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{sourceLabel(s.name)}</span>
                   <span className={cn("nums shrink-0 text-[11px]", s.live_jobs ? "text-foreground" : "text-muted-foreground")}>
                     {!s.key_ready
-                      ? "needs a key"
+                      ? t("needs a key")
                       : s.live_jobs
-                        ? `${s.live_jobs} live`
+                        ? t("{n} live", { n: s.live_jobs })
                         : s.fetched_at
-                          ? "nothing new last run"
-                          : "not imported yet"}
+                          ? t("nothing new last run")
+                          : t("not imported yet")}
                   </span>
                   {busy
                     ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
@@ -327,24 +345,24 @@ export function FindJobsPage() {
             {sites.length === 0 && (
               <p className="col-span-full rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
                 {sitesError ? (
-                  <>The site list did not load: {sitesError}.{" "}
+                  <>{t("The site list did not load: {error}.", { error: sitesError })}{" "}
                     <button type="button" className="font-semibold text-foreground underline underline-offset-2" onClick={loadSites}>
-                      Try again
+                      {t("Try again")}
                     </button>
                   </>
-                ) : "Loading the site list…"}
+                ) : t("Loading the site list…")}
               </p>
             )}
           </div>
 
           {importing && !importProgress && (
-            <p className="text-xs text-muted-foreground">Starting the import…</p>
+            <p className="text-xs text-muted-foreground">{t("Starting the import…")}</p>
           )}
           {importProgress && (
             <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
               <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                 <span className="truncate">
-                  Importing from {importProgress.label} — site {importProgress.done} of {importProgress.total}
+                  {t("Importing from {label} — site {done} of {total}", { label: importProgress.label, done: importProgress.done, total: importProgress.total })}
                 </span>
                 <span className="shrink-0 font-semibold text-foreground">
                   {importProgress.total ? Math.round((importProgress.done / importProgress.total) * 100) : 0}%
@@ -360,7 +378,7 @@ export function FindJobsPage() {
           )}
 
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Every import searches for your saved titles, skills and locations (Automation settings), then hides postings older than your max job age.
+            {t("Every import searches for your saved titles, skills and locations (Automation settings), then hides postings older than your max job age.")}
           </p>
 
           {importLog.length > 0 && (
@@ -371,14 +389,14 @@ export function FindJobsPage() {
 
           <details className="rounded-xl border border-border/60 bg-muted/20 px-3 py-2">
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
-              Sites that post Egypt jobs but publish no import feed
+              {t("Sites that post Egypt jobs but publish no import feed")}
             </summary>
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              These block automated access, so the app will not pretend to import them. One click opens your own search there:{" "}
+              {t("These block automated access, so the app will not pretend to import them. One click opens your own search there:")}{" "}
               {EGYPT_SEARCH_SITES.map((s) => (
                 <a
                   key={s.name}
-                  className="mr-3 inline-flex items-center gap-1 font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                  className="me-3 inline-flex items-center gap-1 font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
                   href={s.url(q.trim())}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -394,67 +412,67 @@ export function FindJobsPage() {
       <Card>
         <CardContent className="space-y-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold">Filters</p>
+            <p className="text-sm font-semibold">{t("Filters")}</p>
             {hasFilters && (
               <Button variant="ghost" size="sm" onClick={clearAll}>
-                <X className="h-3.5 w-3.5" /> Clear all
+                <X className="h-3.5 w-3.5" /> {t("Clear all")}
               </Button>
             )}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="sm:col-span-2 block">
-              <FilterLabel>Search</FilterLabel>
-              <Input placeholder="Title, company or description…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+              <FilterLabel>{t("Search")}</FilterLabel>
+              <Input placeholder={t("Title, company or description…")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
             </label>
             <label className="block">
-              <FilterLabel>Skill</FilterLabel>
-              <Input placeholder="e.g. Flutter" value={skill} onChange={(e) => { setSkill(e.target.value); setPage(1); }} />
+              <FilterLabel>{t("Skill")}</FilterLabel>
+              <Input placeholder={t("e.g. Flutter")} value={skill} onChange={(e) => { setSkill(e.target.value); setPage(1); }} />
             </label>
             <label className="block">
-              <FilterLabel>Location</FilterLabel>
-              <Input placeholder="e.g. Cairo, Remote" value={location} onChange={(e) => { setLocation(e.target.value); setPage(1); }} />
+              <FilterLabel>{t("Location")}</FilterLabel>
+              <Input placeholder={t("e.g. Cairo, Remote")} value={location} onChange={(e) => { setLocation(e.target.value); setPage(1); }} />
             </label>
             <label className="block">
-              <FilterLabel>Level</FilterLabel>
+              <FilterLabel>{t("Level")}</FilterLabel>
               <Select value={level} onChange={(e) => { setLevel(e.target.value); setPage(1); }}>
-                <option value="">All levels</option>
-                {filters.levels.map((l) => <option key={l} value={l}>{l}</option>)}
+                <option value="">{t("All levels")}</option>
+                {filters.levels.map((l) => <option key={l} value={l}>{t(l)}</option>)}
               </Select>
             </label>
             <label className="block">
-              <FilterLabel>Employment type</FilterLabel>
+              <FilterLabel>{t("Employment type")}</FilterLabel>
               <Select value={empType} onChange={(e) => { setEmpType(e.target.value); setPage(1); }}>
-                <option value="">All types</option>
-                {filters.employment_types.map((t) => <option key={t} value={t}>{t}</option>)}
+                <option value="">{t("All types")}</option>
+                {filters.employment_types.map((et) => <option key={et} value={et}>{t(et)}</option>)}
               </Select>
             </label>
             <label className="block">
-              <FilterLabel>Source</FilterLabel>
+              <FilterLabel>{t("Source")}</FilterLabel>
               <Select value={source} onChange={(e) => { setSource(e.target.value); setPage(1); }}>
-                <option value="">All sources</option>
+                <option value="">{t("All sources")}</option>
                 {filters.sources.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
               </Select>
             </label>
             <label className="block">
-              <FilterLabel>Work mode</FilterLabel>
+              <FilterLabel>{t("Work mode")}</FilterLabel>
               <Select value={remote} onChange={(e) => { setRemote(e.target.value); setPage(1); }}>
-                <option value="">Onsite &amp; remote</option>
-                <option value="true">Remote only</option>
-                <option value="false">Onsite only</option>
+                <option value="">{t("Onsite & remote")}</option>
+                <option value="true">{t("Remote only")}</option>
+                <option value="false">{t("Onsite only")}</option>
               </Select>
             </label>
             <label className="block">
-              <FilterLabel>Sort by</FilterLabel>
+              <FilterLabel>{t("Sort by")}</FilterLabel>
               <Select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1); }}>
-                {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {SORTS.map((s) => <option key={s.value} value={s.value}>{t(s.label)}</option>)}
               </Select>
             </label>
           </div>
 
           {activeFilters.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-3">
-              <span className="text-[11px] font-medium text-muted-foreground">Active:</span>
+              <span className="text-[11px] font-medium text-muted-foreground">{t("Active:")}</span>
               {activeFilters.map((f) => (
                 <button
                   key={f.key}
@@ -473,8 +491,8 @@ export function FindJobsPage() {
 
       {error && items.length > 0 && (
         <p className="rounded-xl border border-red-500/25 bg-red-500/[0.05] p-3 text-sm text-red-700 dark:text-red-400">
-          {error} — showing the last results that loaded.{" "}
-          <button className="font-semibold underline" onClick={load}>Try again</button>
+          {t("{error} — showing the last results that loaded.", { error })}{" "}
+          <button className="font-semibold underline" onClick={load}>{t("Try again")}</button>
         </p>
       )}
 
@@ -487,9 +505,9 @@ export function FindJobsPage() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={SearchX}
-          title="No jobs found"
-          description="Try different filters, or import from one of the sites above to fill your database."
-          action={<Button onClick={() => importSite(null)} disabled={importing !== null}>Import jobs now</Button>}
+          title={t("No jobs found")}
+          description={t("Try different filters, or import from one of the sites above to fill your database.")}
+          action={<Button onClick={() => importSite(null)} disabled={importing !== null}>{t("Import jobs now")}</Button>}
         />
       ) : (
         <>
@@ -508,8 +526,11 @@ export function FindJobsPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/60 px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              Showing <span className="font-semibold text-foreground">{items.length}</span> of{" "}
-              <span className="font-semibold text-foreground">{total ?? items.length}</span> — use “Load more” to keep browsing.
+              {t("Showing")}{" "}
+              <span className="font-semibold text-foreground">{items.length}</span>{" "}
+              {t("of")}{" "}
+              <span className="font-semibold text-foreground">{total ?? items.length}</span>
+              {" "}{t("— use “Load more” to keep browsing.")}
             </p>
             {items.length < (total ?? items.length) && (
               <Button variant="outline" size="sm" disabled={loadingMore} onClick={loadMore}>
@@ -518,7 +539,7 @@ export function FindJobsPage() {
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}
-                Load more ({Math.min(pageSize, (total ?? items.length) - items.length)} more)
+                {t("Load more ({n} more)", { n: Math.min(pageSize, (total ?? items.length) - items.length) })}
               </Button>
             )}
           </div>

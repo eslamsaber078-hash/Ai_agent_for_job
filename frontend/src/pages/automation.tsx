@@ -26,6 +26,8 @@ import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/layout/page-header";
 import { formatDateTime } from "@/lib/format";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
+import { translate } from "@/lib/translations";
 import { cn } from "@/lib/utils";
 
 // A stored value outside the preset list must still show as selected.
@@ -34,9 +36,9 @@ function withCurrent(presets: number[], current: number): number[] {
 }
 
 function intervalLabel(n: number): string {
-  if (n % 1440 === 0) return n === 1440 ? "Every 24 hours" : `Every ${n / 1440} days`;
-  if (n % 60 === 0) return n === 60 ? "Every hour" : `Every ${n / 60} hours`;
-  return `Every ${n} minutes`;
+  if (n % 1440 === 0) return n === 1440 ? translate("Every 24 hours") : translate("Every {n} days", { n: n / 1440 });
+  if (n % 60 === 0) return n === 60 ? translate("Every hour") : translate("Every {n} hours", { n: n / 60 });
+  return translate("Every {n} minutes", { n });
 }
 
 const AGE_PRESETS = [7, 14, 30, 45, 60, 90];
@@ -48,6 +50,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 function TermEditor({ label, hint, values, onChange, placeholder }: {
   label: string; hint: string; values: string[]; onChange: (v: string[]) => void; placeholder: string;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState("");
 
   const add = (raw: string) => {
@@ -71,7 +74,7 @@ function TermEditor({ label, hint, values, onChange, placeholder }: {
               type="button"
               onClick={() => onChange(values.filter((x) => x !== v))}
               className="text-muted-foreground transition-colors hover:text-foreground"
-              aria-label={`Remove ${v}`}
+              aria-label={t("Remove {term}", { term: v })}
             >
               <X className="h-3 w-3" />
             </button>
@@ -81,7 +84,7 @@ function TermEditor({ label, hint, values, onChange, placeholder }: {
           aria-label={label}
           className="min-w-[9rem] flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-muted-foreground/80"
           value={draft}
-          placeholder={values.length ? "Type and press Enter" : placeholder}
+          placeholder={values.length ? t("Type and press Enter") : t(placeholder)}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === ",") {
@@ -100,23 +103,22 @@ function TermEditor({ label, hint, values, onChange, placeholder }: {
 }
 
 function SearchPlanPreview({ plan, inherited }: { plan: SearchPlan; inherited: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-semibold">This is exactly what an import will ask for</p>
-        <Badge variant="secondary">Live preview</Badge>
+        <p className="text-sm font-semibold">{t("This is exactly what an import will ask for")}</p>
+        <Badge variant="secondary">{t("Live preview")}</Badge>
       </div>
       {inherited && (
         <p className="text-[11px] leading-relaxed text-muted-foreground">
-          These titles and skills were copied from your Resume &amp; Profile page because the
-          automation list was empty. Saving them here pins them, and then this editor is the one
-          that decides.
+          {t("These titles and skills were copied from your Resume & Profile page because the automation list was empty. Saving them here pins them, and then this editor is the one that decides.")}
         </p>
       )}
       {plan.corrections.length > 0 && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-[11px]">
           <p className="font-semibold text-amber-700 dark:text-amber-400">
-            Spelling check — the search uses the corrected term
+            {t("Spelling check — the search uses the corrected term")}
           </p>
           <ul className="mt-1.5 space-y-0.5">
             {plan.corrections.map((c) => (
@@ -126,16 +128,15 @@ function SearchPlanPreview({ plan, inherited }: { plan: SearchPlan; inherited: b
             ))}
           </ul>
           <p className="mt-1.5 text-muted-foreground">
-            Your saved text stays exactly as you wrote it; only this search is corrected.
+            {t("Your saved text stays exactly as you wrote it; only this search is corrected.")}
           </p>
         </div>
       )}
       {plan.terms_waiting.length > 0 && (
         <p className="text-[11px] leading-relaxed text-muted-foreground">
-          {plan.terms.length} phrases are searched per import ({plan.terms.join(", ")}).{" "}
-          {plan.terms_waiting.length} more {plan.terms_waiting.length === 1 ? "is" : "are"} not
-          searched yet ({plan.terms_waiting.slice(0, 3).join(", ")}
-          {plan.terms_waiting.length > 3 ? ", …" : ""}) — free a slot by removing one above.
+          {t("{n} phrases are searched per import ({list}).", { n: plan.terms.length, list: plan.terms.join(", ") })}{" "}
+          {t(plan.terms_waiting.length === 1 ? "{m} more is not searched yet ({list})" : "{m} more are not searched yet ({list})", { m: plan.terms_waiting.length, list: plan.terms_waiting.slice(0, 3).join(", ") + (plan.terms_waiting.length > 3 ? ", …" : "") })}{" "}
+          {t("— free a slot by removing one above.")}
         </p>
       )}
       <div className="space-y-1.5">
@@ -143,13 +144,13 @@ function SearchPlanPreview({ plan, inherited }: { plan: SearchPlan; inherited: b
           <div key={s.name} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-border/60 pb-2 text-xs last:border-0 last:pb-0">
             <span className="font-medium">{sourceLabel(s.name)}</span>
             <Badge variant="outline">
-              {s.mode === "keyword" ? `${s.asks.length} search${s.asks.length === 1 ? "" : "es"}` : "full listing"}
+              {s.mode === "keyword" ? t(s.asks.length === 1 ? "{n} search" : "{n} searches", { n: s.asks.length }) : t("full listing")}
             </Badge>
             {s.asks.length > 0
               ? <span className="text-muted-foreground">{s.asks.join("  ·  ")}</span>
               : <span className="text-muted-foreground">{s.note}</span>}
             {s.needs_key && !s.key_present && (
-              <span className="text-amber-600 dark:text-amber-400">needs an API key — skipped until then</span>
+              <span className="text-amber-600 dark:text-amber-400">{t("needs an API key — skipped until then")}</span>
             )}
           </div>
         ))}
@@ -160,6 +161,7 @@ function SearchPlanPreview({ plan, inherited }: { plan: SearchPlan; inherited: b
 
 export function AutomationPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [prefs, setPrefs] = useState<SearchPrefs | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
@@ -214,10 +216,10 @@ export function AutomationPage() {
   useEffect(() => {
     if (!prefs) return;
     const draft = prefs;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       api.post<SearchPlan>("/api/automation/search-plan", draft, { track: false }).then(setPlan).catch(() => setPlan(null));
     }, 450);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
 
@@ -228,7 +230,7 @@ export function AutomationPage() {
       const updated = await api.put<SearchPrefs>("/api/automation/settings", prefs);
       setPrefs(updated);
       setInherited(false);
-      toast("Automation settings saved");
+      toast(t("Automation settings saved"));
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -240,8 +242,7 @@ export function AutomationPage() {
     // An empty tick list makes the backend fall back to the saved sites, which is the
     // opposite of what he just unticked. Refuse instead of guessing.
     if (!prefs || !prefs.sources.length) {
-      toast("Tick at least one job site first — otherwise the search would use the saved list, "
-            + "not the boxes you just cleared", "error");
+      toast(t("Tick at least one job site first — otherwise the search would use the saved list, not the boxes you just cleared"), "error");
       return;
     }
     setRunning(true);
@@ -267,7 +268,7 @@ export function AutomationPage() {
       });
       if (ev.type === "done") {
         toast(
-          ev.status === "success" ? `Search finished — ${ev.jobs_found} new jobs` : `Search failed: ${ev.log}`,
+          ev.status === "success" ? t("Search finished — {n} new jobs", { n: ev.jobs_found ?? 0 }) : t("Search failed: {log}", { log: ev.log ?? "" }),
           ev.status === "success" ? "success" : "error"
         );
         loadRuns();
@@ -284,7 +285,7 @@ export function AutomationPage() {
     return error
       ? (
         <div className="space-y-5">
-          <PageHeader eyebrow="Setup" title="Automation" />
+          <PageHeader eyebrow={t("Setup")} title={t("Automation")} />
           <ErrorState message={error} onRetry={load} />
         </div>
       )
@@ -310,18 +311,18 @@ export function AutomationPage() {
   return (
     <div className="animate-fade-in space-y-5">
       <PageHeader
-        eyebrow="Setup"
-        title="Automation"
-        description="Scheduled searches run in the backend process. Keep the backend running for automation to work."
+        eyebrow={t("Setup")}
+        title={t("Automation")}
+        description={t("Scheduled searches run in the backend process. Keep the backend running for automation to work.")}
         actions={
           <>
             <Button variant="outline" onClick={runNow} disabled={running}>
               {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {running ? "Running…" : "Run search now"}
+              {running ? t("Running…") : t("Run search now")}
             </Button>
             <Button onClick={save} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? "Saving…" : "Save settings"}
+              {saving ? t("Saving…") : t("Save settings")}
             </Button>
           </>
         }
@@ -332,27 +333,27 @@ export function AutomationPage() {
           <Card>
             <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0 pb-4">
               <div className="space-y-1.5">
-                <CardTitle>Search schedule</CardTitle>
-                <CardDescription>When the app looks for new postings</CardDescription>
+                <CardTitle>{t("Search schedule")}</CardTitle>
+                <CardDescription>{t("When the app looks for new postings")}</CardDescription>
               </div>
               <Badge variant={prefs.scheduler_running ? "success" : "outline"}>
-                {prefs.scheduler_running ? "Active" : "Inactive"}
+                {prefs.scheduler_running ? t("Active") : t("Inactive")}
               </Badge>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/25 p-4">
                 <div>
-                  <p className="text-sm font-semibold">Scheduled search</p>
+                  <p className="text-sm font-semibold">{t("Scheduled search")}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {prefs.scheduler_running ? `Runs every ${prefs.interval_minutes} minutes` : "Paused — no automatic runs"}
+                    {prefs.scheduler_running ? t("Runs every {n} minutes", { n: prefs.interval_minutes }) : t("Paused — no automatic runs")}
                   </p>
                 </div>
-                <Switch ariaLabel="Scheduled search" checked={prefs.enabled} onChange={(v) => setPrefs({ ...prefs, enabled: v })} />
+                <Switch ariaLabel={t("Scheduled search")} checked={prefs.enabled} onChange={(v) => setPrefs({ ...prefs, enabled: v })} />
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <label className="block">
-                  <FieldLabel>Search interval</FieldLabel>
+                  <FieldLabel>{t("Search interval")}</FieldLabel>
                   <Select value={String(prefs.interval_minutes)} onChange={(e) => setPrefs({ ...prefs, interval_minutes: Number(e.target.value) })}>
                     {withCurrent([15, 30, 60, 360, 720, 1440], prefs.interval_minutes).map((n) => (
                       <option key={n} value={n}>{intervalLabel(n)}</option>
@@ -360,7 +361,7 @@ export function AutomationPage() {
                   </Select>
                 </label>
                 <label className="block">
-                  <FieldLabel>Min. match score</FieldLabel>
+                  <FieldLabel>{t("Min. match score")}</FieldLabel>
                   <Select value={String(prefs.min_match_score)} onChange={(e) => setPrefs({ ...prefs, min_match_score: Number(e.target.value) })}>
                     {withCurrent([0, 30, 50, 60, 70, 80], prefs.min_match_score).map((n) => (
                       <option key={n} value={n}>{n}+</option>
@@ -368,10 +369,10 @@ export function AutomationPage() {
                   </Select>
                 </label>
                 <label className="block">
-                  <FieldLabel>Max job age</FieldLabel>
+                  <FieldLabel>{t("Max job age")}</FieldLabel>
                   <Select value={String(prefs.max_age_days)} onChange={(e) => setPrefs({ ...prefs, max_age_days: Number(e.target.value) })}>
                     {withCurrent(AGE_PRESETS, prefs.max_age_days).map((n) => (
-                      <option key={n} value={n}>Newer than {n} days</option>
+                      <option key={n} value={n}>{t("Newer than {n} days", { n })}</option>
                     ))}
                   </Select>
                 </label>
@@ -379,48 +380,48 @@ export function AutomationPage() {
 
               <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 p-4">
                 <div>
-                  <p className="text-sm font-semibold">Remote only</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Only fetch jobs marked as remote</p>
+                  <p className="text-sm font-semibold">{t("Remote only")}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t("Only fetch jobs marked as remote")}</p>
                 </div>
-                <Switch ariaLabel="Remote only" checked={prefs.remote_only} onChange={(v) => setPrefs({ ...prefs, remote_only: v })} />
+                <Switch ariaLabel={t("Remote only")} checked={prefs.remote_only} onChange={(v) => setPrefs({ ...prefs, remote_only: v })} />
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle>Search terms</CardTitle>
-              <CardDescription>What the scheduled (and manual) search looks for. Each phrase is searched on its own.</CardDescription>
+              <CardTitle>{t("Search terms")}</CardTitle>
+              <CardDescription>{t("What the scheduled (and manual) search looks for. Each phrase is searched on its own.")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <TermEditor
-                  label="Job titles"
+                  label={t("Job titles")}
                   values={prefs.titles}
                   onChange={(v) => setPrefs({ ...prefs, titles: v })}
                   placeholder="Flutter Developer, Python Developer"
-                  hint="Each title is searched on its own, so a posting titled just “Flutter Engineer” still gets caught."
+                  hint={t("Each title is searched on its own, so a posting titled just “Flutter Engineer” still gets caught.")}
                 />
                 <TermEditor
-                  label="Skills"
+                  label={t("Skills")}
                   values={prefs.skills}
                   onChange={(v) => setPrefs({ ...prefs, skills: v })}
                   placeholder="Flutter, Python, C#"
-                  hint="Used after the titles, to fill the remaining search slots."
+                  hint={t("Used after the titles, to fill the remaining search slots.")}
                 />
                 <TermEditor
-                  label="Extra fields to hunt in — your choice"
+                  label={t("Extra fields to hunt in — your choice")}
                   values={prefs.extra_terms ?? []}
                   onChange={(v) => setPrefs({ ...prefs, extra_terms: v })}
                   placeholder="Game Developer, Data Analyst, QA Engineer"
-                  hint="Anything else you want the app to look for, even if it is not in your profile. These rank right after your titles."
+                  hint={t("Anything else you want the app to look for, even if it is not in your profile. These rank right after your titles.")}
                 />
                 <TermEditor
-                  label="Locations"
+                  label={t("Locations")}
                   values={prefs.locations}
                   onChange={(v) => setPrefs({ ...prefs, locations: v })}
                   placeholder="Cairo, Remote"
-                  hint={`The first location is the one LinkedIn and Google Jobs search. Currently: ${plan?.where ?? "Egypt"}.`}
+                  hint={t("The first location is the one LinkedIn and Google Jobs search. Currently: {where}.", { where: plan?.where ?? "Egypt" })}
                 />
               </div>
               {plan && <SearchPlanPreview plan={plan} inherited={inherited} />}
@@ -430,10 +431,10 @@ export function AutomationPage() {
           <Card>
             <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0 pb-4">
               <div className="space-y-1.5">
-                <CardTitle>Job sources</CardTitle>
-                <CardDescription>Ticked sites are searched by the schedule and by “Import all ticked sites” in Find Jobs.</CardDescription>
+                <CardTitle>{t("Job sources")}</CardTitle>
+                <CardDescription>{t("Ticked sites are searched by the schedule and by “Import all ticked sites” in Find Jobs.")}</CardDescription>
               </div>
-              <Badge variant="secondary">{prefs.sources.length} selected</Badge>
+              <Badge variant="secondary">{t("{n} selected", { n: prefs.sources.length })}</Badge>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
@@ -442,7 +443,7 @@ export function AutomationPage() {
                   return (
                     <label
                       key={s.name}
-                      title={s.label}
+                      title={t(s.label)}
                       className={cn(
                         "flex cursor-pointer items-center gap-3 border-b border-border/60 py-2.5 transition-colors hover:bg-muted/30",
                         on && "bg-muted/25"
@@ -451,15 +452,15 @@ export function AutomationPage() {
                       <input type="checkbox" className="h-4 w-4 shrink-0" checked={on} onChange={() => toggleSource(s.name)} />
                       <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{sourceLabel(s.name)}</span>
                       <span className="nums shrink-0 text-[11px] text-muted-foreground">
-                        {s.live_jobs ? `${s.live_jobs} live` : "no postings yet"}
+                        {s.live_jobs ? t("{n} live", { n: s.live_jobs }) : t("no postings yet")}
                       </span>
-                      {s.requires_key && <span className="shrink-0 text-[11px] text-muted-foreground">needs a key</span>}
+                      {s.requires_key && <span className="shrink-0 text-[11px] text-muted-foreground">{t("needs a key")}</span>}
                     </label>
                   );
                 })}
               </div>
               <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                To pull one site alone, use its own button in Find Jobs.
+                {t("To pull one site alone, use its own button in Find Jobs.")}
               </p>
             </CardContent>
           </Card>
@@ -470,14 +471,14 @@ export function AutomationPage() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Searching now
+                  <Loader2 className="h-4 w-4 animate-spin" /> {t("Searching now")}
                 </CardTitle>
-                <CardDescription>Live progress from the backend</CardDescription>
+                <CardDescription>{t("Live progress from the backend")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                   <span className="truncate">
-                    {runProgress ? `${runProgress.label} — site ${runProgress.done} of ${runProgress.total}` : "Starting the search…"}
+                    {runProgress ? t("{label} — site {done} of {total}", { label: runProgress.label, done: runProgress.done, total: runProgress.total }) : t("Starting the search…")}
                   </span>
                   <span className="shrink-0 font-semibold text-foreground">
                     {runProgress?.total ? Math.round((runProgress.done / runProgress.total) * 100) : 0}%
@@ -501,33 +502,33 @@ export function AutomationPage() {
           <Card className="lg:sticky lg:top-24">
             <CardHeader className="flex-row items-start justify-between space-y-0 pb-4">
               <div className="space-y-1.5">
-                <CardTitle>Run history</CardTitle>
-                <CardDescription>Latest automation runs, newest first</CardDescription>
+                <CardTitle>{t("Run history")}</CardTitle>
+                <CardDescription>{t("Latest automation runs, newest first")}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               {runs.length === 0 ? (
                 <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No runs yet. Press “Run search now” to trigger the first one.
+                  {t("No runs yet. Press “Run search now” to trigger the first one.")}
                 </p>
               ) : (
                 <div className="space-y-2">
                   {runs.slice(0, 10).map((r) => (
                     <div key={r.id} className="rounded-xl border border-border/70 bg-card p-3">
                       <button
-                        className="flex w-full items-center gap-2 text-left"
+                        className="flex w-full items-center gap-2 text-start"
                         onClick={() => setExpandedRun(expandedRun === r.id ? null : r.id)}
                         aria-expanded={expandedRun === r.id}
                       >
                         <Badge variant={r.status === "success" ? "success" : "danger"}>{r.status}</Badge>
                         <span className="text-[11px] text-muted-foreground">{r.trigger}</span>
                         <span className="truncate text-[11px] text-muted-foreground">{formatDateTime(r.started_at)}</span>
-                        <span className="ml-auto shrink-0 text-[11px] font-semibold">{r.jobs_found} new</span>
+                        <span className="ms-auto shrink-0 text-[11px] font-semibold">{t("{n} new", { n: r.jobs_found })}</span>
                         <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", expandedRun === r.id && "rotate-180")} />
                       </button>
                       {expandedRun === r.id && (
                         <pre className="scrollbar-thin mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-2.5 text-[11px] leading-relaxed">
-                          {r.log || r.error || "No log output."}
+                          {r.log || r.error || t("No log output.")}
                         </pre>
                       )}
                     </div>

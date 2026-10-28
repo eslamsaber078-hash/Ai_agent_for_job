@@ -27,6 +27,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 import { cn } from "@/lib/utils";
 
 const REMOTE_OPTIONS = [
@@ -60,6 +61,7 @@ const SECTION_NAV: { id: string; label: string; icon: LucideIcon }[] = [
 ];
 
 function TagsInput({ label, values, onChange, placeholder }: { label: string; values: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
+  const { t } = useI18n();
   const [text, setText] = useState("");
   const add = () => {
     const v = text.trim();
@@ -73,7 +75,7 @@ function TagsInput({ label, values, onChange, placeholder }: { label: string; va
         <Input
           value={text}
           aria-label={label}
-          placeholder={placeholder ?? "Type and press Enter"}
+          placeholder={placeholder ?? t("Type and press Enter")}
           onChange={(e) => setText(e.target.value)}
           // Committing on blur is what keeps a typed-but-unpressed tag from vanishing when
           // he goes straight to "Save profile".
@@ -85,14 +87,14 @@ function TagsInput({ label, values, onChange, placeholder }: { label: string; va
             }
           }}
         />
-        <Button type="button" variant="outline" size="icon" onClick={add} aria-label={`Add ${label}`}><Plus className="h-4 w-4" /></Button>
+        <Button type="button" variant="outline" size="icon" onClick={add} aria-label={t("Add {label}", { label })}><Plus className="h-4 w-4" /></Button>
       </div>
       {values.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {values.map((v) => (
             <span key={v} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/70 px-2 py-1 text-xs font-medium">
               {v}
-              <button type="button" className="text-muted-foreground transition-colors hover:text-red-500" onClick={() => onChange(values.filter((x) => x !== v))} aria-label={`Remove ${v}`}>×</button>
+              <button type="button" className="text-muted-foreground transition-colors hover:text-red-500" onClick={() => onChange(values.filter((x) => x !== v))} aria-label={t("Remove {term}", { term: v })}>×</button>
             </span>
           ))}
         </div>
@@ -129,12 +131,13 @@ function SuggestionList({ items, onUse }: {
   items: TermSuggestion[];
   onUse: (term: string, suggestion: string) => void;
 }) {
+  const { t } = useI18n();
   if (!items.length) return null;
   return (
     <div className="mt-1.5 space-y-1">
       {items.map((s) => (
         <p key={`${s.kind}:${s.term}`} className="text-[11px] text-amber-700 dark:text-amber-400">
-          Did you mean{" "}
+          {t("Did you mean")}{" "}
           <button
             type="button"
             className="font-semibold underline decoration-amber-500/50 underline-offset-2 hover:decoration-amber-600"
@@ -142,7 +145,7 @@ function SuggestionList({ items, onUse }: {
           >
             {s.suggestion}
           </button>{" "}
-          instead of “{s.term}”?
+          {t('instead of “{term}”?', { term: s.term })}
         </p>
       ))}
     </div>
@@ -201,6 +204,7 @@ function ChipToggle({ active, onClick, children }: { active: boolean; onClick: (
 
 export function ProfilePage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -249,11 +253,11 @@ export function ProfilePage() {
     if (!profile) return;
     const blankSkill = profile.skills.findIndex((s) => !s.name.trim());
     if (blankSkill >= 0) {
-      toast(`Skill #${blankSkill + 1} has no name — fill it in or remove it.`, "error");
+      toast(t("Skill #{n} has no name — fill it in or remove it.", { n: blankSkill + 1 }), "error");
       return;
     }
     const steps: [string, () => Promise<unknown>][] = [
-      ["basic details", () => api.put("/api/profile", {
+      [t("basic details"), () => api.put("/api/profile", {
         full_name: profile.full_name, email: profile.email, phone: profile.phone,
         country: profile.country, city: profile.city, linkedin: profile.linkedin,
         github: profile.github, portfolio: profile.portfolio, summary: profile.summary,
@@ -262,10 +266,10 @@ export function ProfilePage() {
         min_salary: profile.min_salary, salary_currency: profile.salary_currency,
         languages: profile.languages, target_levels: profile.target_levels,
       })],
-      ["skills", () => api.put("/api/profile/skills", profile.skills)],
-      ["work experience", () => api.put("/api/profile/experiences", profile.experiences)],
-      ["education", () => api.put("/api/profile/education", profile.education)],
-      ["projects", () => api.put("/api/profile/projects", profile.projects)],
+      ["Skills", () => api.put("/api/profile/skills", profile.skills)],
+      ["Work experience", () => api.put("/api/profile/experiences", profile.experiences)],
+      ["Education", () => api.put("/api/profile/education", profile.education)],
+      ["Projects", () => api.put("/api/profile/projects", profile.projects)],
     ];
     setSaving(true);
     for (let i = 0; i < steps.length; i++) {
@@ -274,12 +278,13 @@ export function ProfilePage() {
         await run();
       } catch (e: any) {
         const rest = steps.length - i - 1;
-        toast(`Saved up to "${label}", but that part failed: ${e.message}${rest > 0 ? ` (${rest} section(s) not saved)` : ""}`, "error");
+        const suffix = rest > 0 ? t(" ({n} section(s) not saved)", { n: rest }) : "";
+        toast(t('Saved up to "{label}", but that part failed: {error}', { label, error: e.message }) + suffix, "error");
         setSaving(false);
         return;
       }
     }
-    toast("Profile saved");
+    toast(t("Profile saved"));
     setSaving(false);
   };
 
@@ -288,7 +293,9 @@ export function ProfilePage() {
     try {
       const updated = await api.upload<Profile>("/api/profile/resume", file);
       setProfile((p) => (p ? { ...p, resume_filename: updated.resume_filename, resume_text: updated.resume_text } : p));
-      toast(`Resume "${file.name}" uploaded${updated.resume_text ? " and text extracted" : ""}`);
+      toast(updated.resume_text
+        ? t('Resume "{name}" uploaded and text extracted', { name: file.name })
+        : t('Resume "{name}" uploaded', { name: file.name }));
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -300,7 +307,7 @@ export function ProfilePage() {
     try {
       await api.delete("/api/profile/resume");
       setProfile((p) => (p ? { ...p, resume_filename: null, resume_text: null } : p));
-      toast("Resume removed");
+      toast(t("Resume removed"));
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -343,7 +350,7 @@ export function ProfilePage() {
       setChosenEdu(data.education.map((e) => !eduIsDuplicate(e)));
       setAutofill(data);
       const total = Object.keys(data.fields).length + data.skills.length + data.experiences.length + data.education.length;
-      if (!total) toast("Nothing readable was found in this CV.", "error");
+      if (!total) toast(t("Nothing readable was found in this CV."), "error");
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -369,7 +376,12 @@ export function ProfilePage() {
       const updated = await api.post<Profile>("/api/profile/resume/autofill/apply", { fields, skills, experiences, education });
       setProfile(updated);
       setAutofill(null);
-      toast(`Profile updated from your CV (${pickedCount} item${pickedCount === 1 ? "" : "s"})`);
+      toast(t(
+        pickedCount === 1
+          ? "Profile updated from your CV ({n} item)"
+          : "Profile updated from your CV ({n} items)",
+        { n: pickedCount }
+      ));
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -380,7 +392,7 @@ export function ProfilePage() {
   if (!profile) {
     return (
       <div className="space-y-5">
-        <PageHeader eyebrow="Your source of truth" title="Resume & Profile" />
+        <PageHeader eyebrow={t("Your source of truth")} title={t("Resume & Profile")} />
         {error
           ? <ErrorState message={error} onRetry={load} />
           : (
@@ -420,32 +432,32 @@ export function ProfilePage() {
   const saveButton = (size: "default" | "lg" = "default") => (
     <Button onClick={save} disabled={saving} size={size}>
       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-      {saving ? "Saving…" : "Save profile"}
+      {saving ? t("Saving…") : t("Save profile")}
     </Button>
   );
 
   return (
     <div className="animate-fade-in space-y-5 pb-10">
       <PageHeader
-        eyebrow="Your source of truth"
-        title="Resume & Profile"
-        description="This profile feeds match scores and everything the AI writes for you. Nothing is ever sent anywhere on its own."
+        eyebrow={t("Your source of truth")}
+        title={t("Resume & Profile")}
+        description={t("This profile feeds match scores and everything the AI writes for you. Nothing is ever sent anywhere on its own.")}
         actions={saveButton()}
       />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="hidden xl:block">
           <nav className="sticky top-24 space-y-1 rounded-2xl border border-border/70 bg-card/70 p-2 shadow-soft backdrop-blur">
-            <p className="px-3 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Sections</p>
+            <p className="px-3 py-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("Sections")}</p>
             {SECTION_NAV.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => scrollTo(item.id)}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-start text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <item.icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate">{t(item.label)}</span>
               </button>
             ))}
           </nav>
@@ -454,20 +466,20 @@ export function ProfilePage() {
         <div className="min-w-0 space-y-5">
           <ProfileSection
             id="basics"
-            title="Basic information"
-            description="Used in generated cover letters and emails — never invent anything beyond this."
+            title={t("Basic information")}
+            description={t("Used in generated cover letters and emails — never invent anything beyond this.")}
           >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <label className="block"><FieldLabel>Full name</FieldLabel><Input className="mt-1.5" value={profile.full_name} onChange={(e) => set("full_name", e.target.value)} /></label>
-              <label className="block"><FieldLabel>Email</FieldLabel><Input className="mt-1.5" type="email" value={profile.email} onChange={(e) => set("email", e.target.value)} /></label>
-              <label className="block"><FieldLabel>Phone</FieldLabel><Input className="mt-1.5" value={profile.phone} onChange={(e) => set("phone", e.target.value)} /></label>
-              <label className="block"><FieldLabel>Country</FieldLabel><Input className="mt-1.5" value={profile.country} onChange={(e) => set("country", e.target.value)} /></label>
-              <label className="block"><FieldLabel>City</FieldLabel><Input className="mt-1.5" value={profile.city} onChange={(e) => set("city", e.target.value)} /></label>
-              <label className="block"><FieldLabel>LinkedIn</FieldLabel><Input className="mt-1.5" value={profile.linkedin} onChange={(e) => set("linkedin", e.target.value)} /></label>
-              <label className="block"><FieldLabel>GitHub</FieldLabel><Input className="mt-1.5" value={profile.github} onChange={(e) => set("github", e.target.value)} /></label>
-              <label className="block"><FieldLabel>Portfolio</FieldLabel><Input className="mt-1.5" value={profile.portfolio} onChange={(e) => set("portfolio", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("Full name")}</FieldLabel><Input className="mt-1.5" value={profile.full_name} onChange={(e) => set("full_name", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("Email")}</FieldLabel><Input className="mt-1.5" type="email" value={profile.email} onChange={(e) => set("email", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("Phone")}</FieldLabel><Input className="mt-1.5" value={profile.phone} onChange={(e) => set("phone", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("Country")}</FieldLabel><Input className="mt-1.5" value={profile.country} onChange={(e) => set("country", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("City")}</FieldLabel><Input className="mt-1.5" value={profile.city} onChange={(e) => set("city", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("LinkedIn")}</FieldLabel><Input className="mt-1.5" value={profile.linkedin} onChange={(e) => set("linkedin", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("GitHub")}</FieldLabel><Input className="mt-1.5" value={profile.github} onChange={(e) => set("github", e.target.value)} /></label>
+              <label className="block"><FieldLabel>{t("Portfolio")}</FieldLabel><Input className="mt-1.5" value={profile.portfolio} onChange={(e) => set("portfolio", e.target.value)} /></label>
               <div className="sm:col-span-2 lg:col-span-1">
-                <FieldLabel>Languages</FieldLabel>
+                <FieldLabel>{t("Languages")}</FieldLabel>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {LANGUAGES.map((l) => (
                     <ChipToggle
@@ -475,48 +487,48 @@ export function ProfilePage() {
                       active={profile.languages.includes(l)}
                       onClick={() => set("languages", profile.languages.includes(l) ? profile.languages.filter((x) => x !== l) : [...profile.languages, l])}
                     >
-                      {l}
+                      {t(l)}
                     </ChipToggle>
                   ))}
                 </div>
               </div>
               <label className="sm:col-span-2 lg:col-span-3 block">
-                <FieldLabel>Professional summary</FieldLabel>
+                <FieldLabel>{t("Professional summary")}</FieldLabel>
                 <Textarea className="mt-1.5" rows={3} value={profile.summary}
                           onChange={(e) => set("summary", e.target.value)}
-                          placeholder="2-3 sentences about who you are and what you do." />
+                          placeholder={t("2-3 sentences about who you are and what you do.")} />
               </label>
             </div>
           </ProfileSection>
 
           <ProfileSection
             id="preferences"
-            title="Job preferences"
-            description="These drive your match scores and scheduled searches."
+            title={t("Job preferences")}
+            description={t("These drive your match scores and scheduled searches.")}
           >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <TagsInput label="Desired job titles" values={profile.desired_titles} onChange={(v) => set("desired_titles", v)} placeholder="e.g. Flutter Developer" />
+                <TagsInput label={t("Desired job titles")} values={profile.desired_titles} onChange={(v) => set("desired_titles", v)} placeholder={t("e.g. Flutter Developer")} />
                 <SuggestionList
                   items={hintsFor("title", profile.desired_titles)}
                   onUse={(term, suggestion) => set("desired_titles", replaceTerm(profile.desired_titles, term, suggestion))}
                 />
               </div>
               <div>
-                <TagsInput label="Preferred locations" values={profile.preferred_locations} onChange={(v) => set("preferred_locations", v)} placeholder="e.g. Cairo, Remote" />
+                <TagsInput label={t("Preferred locations")} values={profile.preferred_locations} onChange={(v) => set("preferred_locations", v)} placeholder={t("e.g. Cairo, Remote")} />
                 <SuggestionList
                   items={hintsFor("location", profile.preferred_locations)}
                   onUse={(term, suggestion) => set("preferred_locations", replaceTerm(profile.preferred_locations, term, suggestion))}
                 />
               </div>
               <label className="block">
-                <FieldLabel>Remote preference</FieldLabel>
+                <FieldLabel>{t("Remote preference")}</FieldLabel>
                 <Select className="mt-1.5" value={profile.remote_preference} onChange={(e) => set("remote_preference", e.target.value)}>
-                  {REMOTE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {REMOTE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
                 </Select>
               </label>
               <div>
-                <FieldLabel>Target levels</FieldLabel>
+                <FieldLabel>{t("Target levels")}</FieldLabel>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {LEVELS.map((l) => (
                     <ChipToggle
@@ -524,34 +536,34 @@ export function ProfilePage() {
                       active={profile.target_levels.includes(l)}
                       onClick={() => set("target_levels", profile.target_levels.includes(l) ? profile.target_levels.filter((x) => x !== l) : [...profile.target_levels, l])}
                     >
-                      {l}
+                      {t(l)}
                     </ChipToggle>
                   ))}
                 </div>
               </div>
               <div>
-                <FieldLabel>Work types</FieldLabel>
+                <FieldLabel>{t("Work types")}</FieldLabel>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {WORK_TYPES.map((t) => (
+                  {WORK_TYPES.map((wt) => (
                     <ChipToggle
-                      key={t}
-                      active={profile.work_types.includes(t)}
-                      onClick={() => set("work_types", profile.work_types.includes(t) ? profile.work_types.filter((x) => x !== t) : [...profile.work_types, t])}
+                      key={wt}
+                      active={profile.work_types.includes(wt)}
+                      onClick={() => set("work_types", profile.work_types.includes(wt) ? profile.work_types.filter((x) => x !== wt) : [...profile.work_types, wt])}
                     >
-                      {t}
+                      {t(wt)}
                     </ChipToggle>
                   ))}
                 </div>
-                <p className="mt-1.5 text-[11px] text-muted-foreground">Not part of the match score — filter by employment type in Find Jobs to narrow results.</p>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">{t("Not part of the match score — filter by employment type in Find Jobs to narrow results.")}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
-                  <FieldLabel>Min. salary</FieldLabel>
+                  <FieldLabel>{t("Min. salary")}</FieldLabel>
                   <Input className="mt-1.5" type="number" min={0} value={profile.min_salary ?? ""}
                          onChange={(e) => set("min_salary", e.target.value === "" ? null : Number(e.target.value))} />
                 </label>
                 <label className="block">
-                  <FieldLabel>Currency</FieldLabel>
+                  <FieldLabel>{t("Currency")}</FieldLabel>
                   <Select className="mt-1.5" value={profile.salary_currency} onChange={(e) => set("salary_currency", e.target.value)}>
                     <option value="EGP">EGP</option>
                     <option value="USD">USD</option>
@@ -566,18 +578,18 @@ export function ProfilePage() {
 
           <ProfileSection
             id="skills"
-            title="Skills"
-            description="Rate each skill 1 (beginner) to 5 (expert). These are matched against every posting."
+            title={t("Skills")}
+            description={t("Rate each skill 1 (beginner) to 5 (expert). These are matched against every posting.")}
             action={
               <Button variant="outline" size="sm" onClick={() => set("skills", [...profile.skills, { name: "", level: 3, years: null, _key: newKey() }])}>
-                <Plus className="h-4 w-4" /> Add skill
+                <Plus className="h-4 w-4" /> {t("Add skill")}
               </Button>
             }
           >
             <div className="space-y-2.5">
               {profile.skills.length > 0 && (
                 <div className="hidden gap-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_140px_120px_40px]">
-                  <span>Skill</span><span>Level</span><span>Years</span><span />
+                  <span>{t("Skill")}</span><span>{t("Level")}</span><span>{t("Years")}</span><span />
                 </div>
               )}
               {profile.skills.map((s, i) => {
@@ -585,12 +597,12 @@ export function ProfilePage() {
                 return (
                   <div key={s.id ?? s._key ?? i} className="rounded-xl border border-border/70 bg-card p-3 transition-colors hover:border-border">
                     <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_140px_120px_40px]">
-                      <Input value={s.name} aria-label={`Skill ${i + 1} name`} placeholder="Skill name" onChange={(e) => patchSkill(i, { name: e.target.value })} />
-                      <Select value={String(s.level)} aria-label={`Skill ${i + 1} level`} onChange={(e) => patchSkill(i, { level: Number(e.target.value) })}>
-                        {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>Level {n}</option>)}
+                      <Input value={s.name} aria-label={t("Skill {n} name", { n: i + 1 })} placeholder={t("Skill name")} onChange={(e) => patchSkill(i, { name: e.target.value })} />
+                      <Select value={String(s.level)} aria-label={t("Skill {n} level", { n: i + 1 })} onChange={(e) => patchSkill(i, { level: Number(e.target.value) })}>
+                        {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{t("Level {n}", { n })}</option>)}
                       </Select>
-                      <Input type="number" min={0} step={0.5} aria-label={`Skill ${i + 1} years of experience`} placeholder="Years" value={s.years ?? ""} onChange={(e) => patchSkill(i, { years: e.target.value === "" ? null : Number(e.target.value) })} />
-                      <Button variant="ghost" size="icon" className="h-9 w-9 justify-self-end text-muted-foreground hover:text-red-600" onClick={() => set("skills", profile.skills.filter((_, idx) => idx !== i))} aria-label={`Remove ${s.name || "skill"}`}>
+                      <Input type="number" min={0} step={0.5} aria-label={t("Skill {n} years of experience", { n: i + 1 })} placeholder={t("Years")} value={s.years ?? ""} onChange={(e) => patchSkill(i, { years: e.target.value === "" ? null : Number(e.target.value) })} />
+                      <Button variant="ghost" size="icon" className="h-9 w-9 justify-self-end text-muted-foreground hover:text-red-600" onClick={() => set("skills", profile.skills.filter((_, idx) => idx !== i))} aria-label={t("Remove {term}", { term: s.name || t("skill") })}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -605,7 +617,7 @@ export function ProfilePage() {
               })}
               {profile.skills.length === 0 && (
                 <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No skills yet. Add the ones you can honestly do — they drive the match score.
+                  {t("No skills yet. Add the ones you can honestly do — they drive the match score.")}
                 </p>
               )}
             </div>
@@ -613,10 +625,10 @@ export function ProfilePage() {
 
           <ProfileSection
             id="experience"
-            title="Work experience"
+            title={t("Work experience")}
             action={
               <Button variant="outline" size="sm" onClick={() => set("experiences", [...profile.experiences, { title: "", company: "", location: "", start_date: null, end_date: null, current: false, description: "", _key: newKey() }])}>
-                <Plus className="h-4 w-4" /> Add experience
+                <Plus className="h-4 w-4" /> {t("Add experience")}
               </Button>
             }
           >
@@ -624,33 +636,33 @@ export function ProfilePage() {
               {profile.experiences.map((e, i) => (
                 <div key={e.id ?? e._key ?? i} className="rounded-xl border border-border/70 bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold">{e.title || "New role"}{e.company ? ` · ${e.company}` : ""}</p>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => set("experiences", profile.experiences.filter((_, idx) => idx !== i))} aria-label="Remove experience">
+                    <p className="text-sm font-semibold">{e.title || t("New role")}{e.company ? ` · ${e.company}` : ""}</p>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => set("experiences", profile.experiences.filter((_, idx) => idx !== i))} aria-label={t("Remove experience")}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <label className="block"><FieldLabel>Job title</FieldLabel><Input className="mt-1" value={e.title} onChange={(ev) => patchExp(i, { title: ev.target.value })} /></label>
-                    <label className="block"><FieldLabel>Company</FieldLabel><Input className="mt-1" value={e.company} onChange={(ev) => patchExp(i, { company: ev.target.value })} /></label>
-                    <label className="block"><FieldLabel>Location</FieldLabel><Input className="mt-1" value={e.location} onChange={(ev) => patchExp(i, { location: ev.target.value })} /></label>
-                    <label className="block"><FieldLabel>Start (YYYY-MM)</FieldLabel><Input className="mt-1" value={e.start_date ?? ""} placeholder="2024-06" onChange={(ev) => patchExp(i, { start_date: ev.target.value || null })} /></label>
-                    <label className="block"><FieldLabel>End (YYYY-MM)</FieldLabel><Input className="mt-1" value={e.end_date ?? ""} placeholder="2025-01" disabled={e.current} onChange={(ev) => patchExp(i, { end_date: ev.target.value || null })} /></label>
+                    <label className="block"><FieldLabel>{t("Job title")}</FieldLabel><Input className="mt-1" value={e.title} onChange={(ev) => patchExp(i, { title: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("Company")}</FieldLabel><Input className="mt-1" value={e.company} onChange={(ev) => patchExp(i, { company: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("Location")}</FieldLabel><Input className="mt-1" value={e.location} onChange={(ev) => patchExp(i, { location: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("Start (YYYY-MM)")}</FieldLabel><Input className="mt-1" value={e.start_date ?? ""} placeholder="2024-06" onChange={(ev) => patchExp(i, { start_date: ev.target.value || null })} /></label>
+                    <label className="block"><FieldLabel>{t("End (YYYY-MM)")}</FieldLabel><Input className="mt-1" value={e.end_date ?? ""} placeholder="2025-01" disabled={e.current} onChange={(ev) => patchExp(i, { end_date: ev.target.value || null })} /></label>
                     <div className="flex items-end pb-1">
                       <label className="flex items-center gap-2 text-sm text-muted-foreground">
                         <input type="checkbox" checked={e.current} onChange={(ev) => patchExp(i, { current: ev.target.checked })} className="h-4 w-4" />
-                        Current role
+                        {t("Current role")}
                       </label>
                     </div>
                   </div>
                   <label className="mt-3 block">
-                    <FieldLabel>Description</FieldLabel>
+                    <FieldLabel>{t("Description")}</FieldLabel>
                     <Textarea className="mt-1" rows={2} value={e.description} onChange={(ev) => patchExp(i, { description: ev.target.value })} />
                   </label>
                 </div>
               ))}
               {profile.experiences.length === 0 && (
                 <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No experience added yet. Add the roles you actually held.
+                  {t("No experience added yet. Add the roles you actually held.")}
                 </p>
               )}
             </div>
@@ -658,10 +670,10 @@ export function ProfilePage() {
 
           <ProfileSection
             id="education"
-            title="Education"
+            title={t("Education")}
             action={
               <Button variant="outline" size="sm" onClick={() => set("education", [...profile.education, { degree: "", institution: "", field: "", start_date: null, end_date: null, description: "", _key: newKey() }])}>
-                <Plus className="h-4 w-4" /> Add education
+                <Plus className="h-4 w-4" /> {t("Add education")}
               </Button>
             }
           >
@@ -669,27 +681,27 @@ export function ProfilePage() {
               {profile.education.map((e, i) => (
                 <div key={e.id ?? e._key ?? i} className="rounded-xl border border-border/70 bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold">{e.degree || "New degree"}{e.institution ? ` · ${e.institution}` : ""}</p>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => set("education", profile.education.filter((_, idx) => idx !== i))} aria-label="Remove education">
+                    <p className="text-sm font-semibold">{e.degree || t("New degree")}{e.institution ? ` · ${e.institution}` : ""}</p>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => set("education", profile.education.filter((_, idx) => idx !== i))} aria-label={t("Remove education")}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                   <label className="mt-3 grid gap-3 sm:grid-cols-3 block">
-                    <label className="block"><FieldLabel>Degree</FieldLabel><Input className="mt-1" value={e.degree} onChange={(ev) => patchEdu(i, { degree: ev.target.value })} /></label>
-                    <label className="block"><FieldLabel>Institution</FieldLabel><Input className="mt-1" value={e.institution} onChange={(ev) => patchEdu(i, { institution: ev.target.value })} /></label>
-                    <label className="block"><FieldLabel>Field</FieldLabel><Input className="mt-1" value={e.field} onChange={(ev) => patchEdu(i, { field: ev.target.value })} /></label>
-                    <label className="block"><FieldLabel>Start</FieldLabel><Input className="mt-1" value={e.start_date ?? ""} onChange={(ev) => patchEdu(i, { start_date: ev.target.value || null })} /></label>
-                    <label className="block"><FieldLabel>End</FieldLabel><Input className="mt-1" value={e.end_date ?? ""} onChange={(ev) => patchEdu(i, { end_date: ev.target.value || null })} /></label>
+                    <label className="block"><FieldLabel>{t("Degree")}</FieldLabel><Input className="mt-1" value={e.degree} onChange={(ev) => patchEdu(i, { degree: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("Institution")}</FieldLabel><Input className="mt-1" value={e.institution} onChange={(ev) => patchEdu(i, { institution: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("Field")}</FieldLabel><Input className="mt-1" value={e.field} onChange={(ev) => patchEdu(i, { field: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("Start")}</FieldLabel><Input className="mt-1" value={e.start_date ?? ""} onChange={(ev) => patchEdu(i, { start_date: ev.target.value || null })} /></label>
+                    <label className="block"><FieldLabel>{t("End")}</FieldLabel><Input className="mt-1" value={e.end_date ?? ""} onChange={(ev) => patchEdu(i, { end_date: ev.target.value || null })} /></label>
                   </label>
                   <label className="mt-3 block">
-                    <FieldLabel>Description</FieldLabel>
+                    <FieldLabel>{t("Description")}</FieldLabel>
                     <Textarea className="mt-1" rows={2} value={e.description} onChange={(ev) => patchEdu(i, { description: ev.target.value })} />
                   </label>
                 </div>
               ))}
               {profile.education.length === 0 && (
                 <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No education added yet.
+                  {t("No education added yet.")}
                 </p>
               )}
             </div>
@@ -697,10 +709,10 @@ export function ProfilePage() {
 
           <ProfileSection
             id="projects"
-            title="Projects & portfolio"
+            title={t("Projects & portfolio")}
             action={
               <Button variant="outline" size="sm" onClick={() => set("projects", [...profile.projects, { name: "", description: "", url: "", technologies: [], _key: newKey() }])}>
-                <Plus className="h-4 w-4" /> Add project
+                <Plus className="h-4 w-4" /> {t("Add project")}
               </Button>
             }
           >
@@ -708,18 +720,18 @@ export function ProfilePage() {
               {profile.projects.map((p, i) => (
                 <div key={p.id ?? p._key ?? i} className="rounded-xl border border-border/70 bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold">{p.name || "New project"}</p>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => set("projects", profile.projects.filter((_, idx) => idx !== i))} aria-label="Remove project">
+                    <p className="text-sm font-semibold">{p.name || t("New project")}</p>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600" onClick={() => set("projects", profile.projects.filter((_, idx) => idx !== i))} aria-label={t("Remove project")}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                   <label className="mt-3 grid gap-3 sm:grid-cols-2 block">
-                    <label className="block"><FieldLabel>Project name</FieldLabel><Input className="mt-1" value={p.name} onChange={(ev) => patchProj(i, { name: ev.target.value })} /></label>
-                    <label className="block"><FieldLabel>URL</FieldLabel><Input className="mt-1" value={p.url} onChange={(ev) => patchProj(i, { url: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("Project name")}</FieldLabel><Input className="mt-1" value={p.name} onChange={(ev) => patchProj(i, { name: ev.target.value })} /></label>
+                    <label className="block"><FieldLabel>{t("URL")}</FieldLabel><Input className="mt-1" value={p.url} onChange={(ev) => patchProj(i, { url: ev.target.value })} /></label>
                   </label>
-                  <div className="mt-3"><FieldLabel>Description</FieldLabel><Textarea className="mt-1" rows={2} value={p.description} onChange={(ev) => patchProj(i, { description: ev.target.value })} /></div>
+                  <div className="mt-3"><FieldLabel>{t("Description")}</FieldLabel><Textarea className="mt-1" rows={2} value={p.description} onChange={(ev) => patchProj(i, { description: ev.target.value })} /></div>
                   <label className="mt-3 block">
-                    <FieldLabel>Technologies (comma separated)</FieldLabel>
+                    <FieldLabel>{t("Technologies (comma separated)")}</FieldLabel>
                     <CommaInput className="mt-1" values={p.technologies}
                                 placeholder="Flutter, Firebase, REST APIs"
                                 onCommit={(v) => patchProj(i, { technologies: v })} />
@@ -728,7 +740,7 @@ export function ProfilePage() {
               ))}
               {profile.projects.length === 0 && (
                 <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No projects added yet. Real projects you built are worth showing.
+                  {t("No projects added yet. Real projects you built are worth showing.")}
                 </p>
               )}
             </div>
@@ -736,8 +748,8 @@ export function ProfilePage() {
 
           <ProfileSection
             id="resume"
-            title="Resume file"
-            description="PDF, TXT, DOCX or MD up to 5 MB. Text is extracted from all of them so the AI can use it. Old .doc files: save as .docx or PDF first. Files are never executed."
+            title={t("Resume file")}
+            description={t("PDF, TXT, DOCX or MD up to 5 MB. Text is extracted from all of them so the AI can use it. Old .doc files: save as .docx or PDF first. Files are never executed.")}
           >
             {profile.resume_filename ? (
               <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-muted/30 p-4">
@@ -747,7 +759,7 @@ export function ProfilePage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{profile.resume_filename}</p>
                   <p className="text-xs text-muted-foreground">
-                    {profile.resume_text ? "Text extracted — the AI can read it" : "No readable text — match scores can't use it"}
+                    {profile.resume_text ? t("Text extracted — the AI can read it") : t("No readable text — match scores can't use it")}
                   </p>
                 </div>
                 <Button
@@ -755,18 +767,18 @@ export function ProfilePage() {
                   size="sm"
                   onClick={runAutofill}
                   disabled={autofillLoading || !profile.resume_text}
-                  title={profile.resume_text ? "Fill your profile from this resume" : "No readable text in this file"}
+                  title={profile.resume_text ? t("Fill your profile from this resume") : t("No readable text in this file")}
                 >
                   {autofillLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  Auto-fill from CV
+                  {t("Auto-fill from CV")}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setConfirmResumeDelete(true)}>Remove</Button>
+                <Button variant="outline" size="sm" onClick={() => setConfirmResumeDelete(true)}>{t("Remove")}</Button>
               </div>
             ) : (
               <label className={`flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-6 py-12 text-center transition-colors hover:border-foreground/25 hover:bg-muted/40 ${uploading ? "pointer-events-none opacity-60" : "cursor-pointer"}`}>
                 <Upload className="h-5 w-5 text-muted-foreground/60" aria-hidden />
-                <p className="mt-4 text-[15px] font-semibold">{uploading ? "Uploading…" : "Upload your resume"}</p>
-                <p className="mt-1 text-xs text-muted-foreground">PDF / TXT / DOCX / MD, max 5 MB</p>
+                <p className="mt-4 text-[15px] font-semibold">{uploading ? t("Uploading…") : t("Upload your resume")}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t("PDF / TXT / DOCX / MD, max 5 MB")}</p>
                 <input
                   type="file"
                   className="hidden"
@@ -785,15 +797,15 @@ export function ProfilePage() {
           <Dialog
             open={!!autofill}
             onClose={() => setAutofill(null)}
-            title="Auto-fill from your CV"
-            description="Read literally from your uploaded resume. Nothing is saved until you press Apply."
+            title={t("Auto-fill from your CV")}
+            description={t("Read literally from your uploaded resume. Nothing is saved until you press Apply.")}
             wide
           >
             {autofill && (
               <div className="space-y-5">
                 {Object.keys(autofill.fields).length > 0 && (
                   <section>
-                    <h3 className="text-sm font-semibold">Contact &amp; summary</h3>
+                    <h3 className="text-sm font-semibold">{t("Contact & summary")}</h3>
                     <div className="mt-2 divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
                       {AUTOFILL_ORDER.filter((key) => key in autofill.fields).map((key) => {
                         const value = autofill.fields[key];
@@ -810,10 +822,10 @@ export function ProfilePage() {
                             />
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-                                {AUTOFILL_LABELS[key]}
+                                {t(AUTOFILL_LABELS[key])}
                                 {replaces && (
                                   <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                                    replaces current
+                                    {t("replaces current")}
                                   </span>
                                 )}
                               </span>
@@ -826,7 +838,7 @@ export function ProfilePage() {
                               </span>
                               {replaces && (
                                 <span className="mt-0.5 line-clamp-2 block break-words text-[11px] text-muted-foreground/70">
-                                  Now: {current}
+                                  {t("Now: {current}", { current })}
                                 </span>
                               )}
                             </span>
@@ -840,7 +852,7 @@ export function ProfilePage() {
                 {autofill.skills.length > 0 && (
                   <section>
                     <h3 className="text-sm font-semibold">
-                      Skills <span className="font-normal text-muted-foreground">({autofill.skills.length})</span>
+                      {t("Skills")} <span className="font-normal text-muted-foreground">({autofill.skills.length})</span>
                     </h3>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {autofill.skills.map((name) => {
@@ -852,7 +864,7 @@ export function ProfilePage() {
                             type="button"
                             aria-pressed={on}
                             disabled={exists}
-                            title={exists ? "Already on your profile" : undefined}
+                            title={exists ? t("Already on your profile") : undefined}
                             onClick={() => setChosenSkills((s) => ({ ...s, [name]: !on }))}
                             className={cn(
                               "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
@@ -873,7 +885,7 @@ export function ProfilePage() {
 
                 {autofill.experiences.length > 0 && (
                   <section>
-                    <h3 className="text-sm font-semibold">Work experience</h3>
+                    <h3 className="text-sm font-semibold">{t("Work experience")}</h3>
                     <div className="mt-2 space-y-2">
                       {autofill.experiences.map((exp, i) => {
                         const exists = expIsDuplicate(exp);
@@ -892,10 +904,10 @@ export function ProfilePage() {
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-2 text-xs font-semibold">
                                 {exp.title}{exp.company ? ` · ${exp.company}` : ""}
-                                {exists && <span className="text-[10px] font-medium text-muted-foreground">already on your profile</span>}
+                                {exists && <span className="text-[10px] font-medium text-muted-foreground">{t("already on your profile")}</span>}
                               </span>
                               <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">
-                                {exp.start_date ?? "—"} → {exp.current ? "Present" : exp.end_date ?? "—"}
+                                {exp.start_date ?? "—"} → {exp.current ? t("Present") : exp.end_date ?? "—"}
                               </span>
                               {exp.description && (
                                 <span className="mt-0.5 line-clamp-3 block whitespace-pre-line text-[11px] leading-relaxed text-muted-foreground">
@@ -912,7 +924,7 @@ export function ProfilePage() {
 
                 {autofill.education.length > 0 && (
                   <section>
-                    <h3 className="text-sm font-semibold">Education</h3>
+                    <h3 className="text-sm font-semibold">{t("Education")}</h3>
                     <div className="mt-2 space-y-2">
                       {autofill.education.map((edu, i) => {
                         const exists = eduIsDuplicate(edu);
@@ -931,7 +943,7 @@ export function ProfilePage() {
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-2 text-xs font-semibold">
                                 {edu.degree}{edu.institution ? ` · ${edu.institution}` : ""}
-                                {exists && <span className="text-[10px] font-medium text-muted-foreground">already on your profile</span>}
+                                {exists && <span className="text-[10px] font-medium text-muted-foreground">{t("already on your profile")}</span>}
                               </span>
                               {edu.field && <span className="mt-0.5 block text-[11px] text-muted-foreground">{edu.field}</span>}
                               <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">
@@ -950,14 +962,17 @@ export function ProfilePage() {
 
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
                   <p className="text-xs text-muted-foreground">
-                    {pickedCount} of {Object.keys(autofill.fields).length + autofill.skills.length
-                      + autofill.experiences.length + autofill.education.length} found items selected
+                    {t("{n} of {total} found items selected", {
+                      n: pickedCount,
+                      total: Object.keys(autofill.fields).length + autofill.skills.length
+                        + autofill.experiences.length + autofill.education.length,
+                    })}
                   </p>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setAutofill(null)}>Cancel</Button>
+                    <Button variant="outline" onClick={() => setAutofill(null)}>{t("Cancel")}</Button>
                     <Button onClick={applyAutofill} disabled={!pickedCount || autofillApplying}>
                       {autofillApplying && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Apply selected
+                      {t("Apply selected")}
                     </Button>
                   </div>
                 </div>
@@ -969,9 +984,9 @@ export function ProfilePage() {
             open={confirmResumeDelete}
             onClose={() => setConfirmResumeDelete(false)}
             onConfirm={() => void deleteResume()}
-            title="Remove your resume file"
-            message="The uploaded file and the text read from it are deleted. Your saved profile details stay — only the resume goes. You would have to upload the file again."
-            confirmLabel="Remove resume"
+            title={t("Remove your resume file")}
+            message={t("The uploaded file and the text read from it are deleted. Your saved profile details stay — only the resume goes. You would have to upload the file again.")}
+            confirmLabel={t("Remove resume")}
           />
 
           <div className="flex justify-end border-t border-border/60 pt-5">

@@ -1,10 +1,16 @@
+import { translate } from "@/lib/translations";
+
+function isAr(): boolean {
+  return document.documentElement.lang === "ar";
+}
+
 export function formatSalary(job: { salary_min: number | null; salary_max: number | null; salary_currency: string | null }): string {
-  if (!job.salary_min && !job.salary_max) return "Not disclosed";
+  if (!job.salary_min && !job.salary_max) return translate("Not disclosed");
   const cur = job.salary_currency ?? "";
   const fmt = (n: number) => n.toLocaleString("en-US");
   if (job.salary_min && job.salary_max) return `${cur} ${fmt(job.salary_min)} – ${fmt(job.salary_max)}`;
   if (job.salary_min) return `${cur} ${fmt(job.salary_min)}+`;
-  return `up to ${cur} ${fmt(job.salary_max!)}`;
+  return `${translate("up to")} ${cur} ${fmt(job.salary_max!)}`;
 }
 
 /** Local calendar day for an <input type="date"> — slicing a UTC string shifts the day. */
@@ -22,22 +28,22 @@ export function timeAgo(value: string | null): string {
   if (Number.isNaN(then)) return "—";
   const diff = Date.now() - then;
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return translate("just now");
+  if (mins < 60) return translate("{mins}m ago", { mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return translate("{hours}h ago", { hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return translate("{days}d ago", { days });
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
+  if (months < 12) return translate("{months}mo ago", { months });
+  return translate("{years}y ago", { years: Math.floor(months / 12) });
 }
 
 export function formatDate(value: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString(isAr() ? "ar-EG" : "en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 /**
@@ -54,14 +60,16 @@ export function postedLabel(job: {
   date_kind?: string;
 }): string {
   if (job.date_kind === "unknown" || !job.posted_date) {
-    return job.first_seen ? `In your tracker since ${formatDate(job.first_seen)}` : "Date not stated";
+    return job.first_seen ? translate("In your tracker since {date}", { date: formatDate(job.first_seen) }) : translate("Date not stated");
   }
-  const word = job.date_kind === "listed" ? "Listed" : "Posted";
+  const word = translate(job.date_kind === "listed" ? "Listed" : "Posted");
   if (/T00:00:00(\.0+)?(\+00:00|Z)?$/.test(job.posted_date)) {
     const days = dayCount(job.posted_date);
-    return days < 1 ? `${word} today` : days === 1 ? `${word} yesterday` : `${word} ${days}d ago`;
+    if (days < 1) return translate("{word} today", { word });
+    if (days === 1) return translate("{word} yesterday", { word });
+    return translate("{word} {days}d ago", { word, days });
   }
-  return `${word} ${timeAgo(job.posted_date)}`;
+  return translate("{word} {ago}", { word, ago: timeAgo(job.posted_date) });
 }
 
 /** Whole calendar days between a date-only stamp and today, in his own timezone. */
@@ -76,7 +84,7 @@ export function formatDateTime(value: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(isAr() ? "ar-EG" : "en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 /**

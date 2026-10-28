@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Menu, Moon, Sun } from "lucide-react";
+import { Languages, Menu, Moon, Sun } from "lucide-react";
 import { useTheme } from "@/context/theme";
+import { useI18n } from "@/context/i18n";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +19,10 @@ const PAGE_LABELS: Record<string, string> = {
 
 export function Topbar({ onMenu }: { onMenu: () => void }) {
   const { theme, toggle } = useTheme();
+  const { lang, setLang, t } = useI18n();
   const { pathname } = useLocation();
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
-  const pageLabel = PAGE_LABELS[pathname] ?? "Workspace";
+  const pageLabel = t(PAGE_LABELS[pathname] ?? "Workspace");
 
   useEffect(() => {
     let alive = true;
@@ -43,13 +45,13 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
       <button
         className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:hidden"
         onClick={onMenu}
-        aria-label="Open menu"
+        aria-label={t("Open menu")}
       >
         <Menu className="h-5 w-5" />
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">Workspace</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">{t("Workspace")}</p>
         <p className="truncate text-sm font-semibold leading-tight">{pageLabel}</p>
       </div>
 
@@ -58,7 +60,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           "hidden h-8 items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 text-xs font-medium text-muted-foreground sm:inline-flex",
           backendOk === false && "border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-400"
         )}
-        title={backendOk === null ? "Checking the backend" : backendOk ? "Backend connected" : "Backend offline — start it on port 8000"}
+        title={backendOk === null ? t("Checking the backend") : backendOk ? t("Backend connected") : t("Backend offline — start it on port 8000")}
       >
         <span
           className={cn(
@@ -66,14 +68,25 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
             backendOk === null ? "animate-pulse bg-amber-400" : backendOk ? "bg-emerald-500" : "bg-red-500"
           )}
         />
-        {backendOk === null ? "Connecting" : backendOk ? "All systems ready" : "Backend offline"}
+        {backendOk === null ? t("Connecting") : backendOk ? t("All systems ready") : t("Backend offline")}
       </div>
+
+      <button
+        type="button"
+        onClick={() => setLang(lang === "ar" ? "en" : "ar")}
+        className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={t("Switch language")}
+        title={t("Switch language")}
+      >
+        <Languages className="h-4 w-4" />
+        {lang === "ar" ? "English" : "عربي"}
+      </button>
 
       <button
         onClick={toggle}
         className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        title={theme === "dark" ? "Light mode" : "Dark mode"}
+        aria-label={theme === "dark" ? t("Switch to light mode") : t("Switch to dark mode")}
+        title={theme === "dark" ? t("Light mode") : t("Dark mode")}
       >
         {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
       </button>

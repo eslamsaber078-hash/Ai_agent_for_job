@@ -85,7 +85,7 @@ export function TopProgress() {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="pointer-events-none fixed left-1/2 top-2 z-50 -translate-x-1/2">
+      <div className="pointer-events-none fixed start-1/2 top-2 z-50 -translate-x-1/2">
         <span className="inline-flex max-w-[80vw] items-center gap-2 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-md">
           {!task && (
             <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />

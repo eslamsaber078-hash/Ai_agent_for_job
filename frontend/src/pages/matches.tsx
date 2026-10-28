@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/page-header";
 import { JobDetailDialog } from "@/components/jobs/job-detail";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 import { cn } from "@/lib/utils";
 
 const SCORE_OPTIONS = [
@@ -27,6 +28,7 @@ const SCORE_OPTIONS = [
 
 export function MatchesPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [data, setData] = useState<MatchList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,15 +68,15 @@ export function MatchesPage() {
   };
 
   useEffect(() => {
-    const t = setTimeout(load, 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(load, 300);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minScore, q]);
 
   if (error && !data) {
     return (
       <div className="space-y-4">
-        <PageHeader eyebrow="Ranking" title="AI Job Matches" />
+        <PageHeader eyebrow={t("Ranking")} title={t("AI Job Matches")} />
         <ErrorState message={error} onRetry={load} busy={loading} />
       </div>
     );
@@ -93,35 +95,35 @@ export function MatchesPage() {
   return (
     <div className="animate-fade-in space-y-5">
       <PageHeader
-        eyebrow="Ranking"
-        title="AI Job Matches"
-        description="Transparent match estimates (0–100) computed from your profile. Best fit first; inside the same score the freshest posting wins. Scores are estimates, not guarantees."
+        eyebrow={t("Ranking")}
+        title={t("AI Job Matches")}
+        description={t("Transparent match estimates (0–100) computed from your profile. Best fit first; inside the same score the freshest posting wins. Scores are estimates, not guarantees.")}
       />
 
       {data?.profile_empty && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 sm:p-5">
           <Radar className="h-[18px] w-[18px] shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Your profile is empty</p>
-            <p className="text-xs text-muted-foreground">Every score is 0 until you add your skills.</p>
+            <p className="text-sm font-semibold">{t("Your profile is empty")}</p>
+            <p className="text-xs text-muted-foreground">{t("Every score is 0 until you add your skills.")}</p>
           </div>
-          <Link to="/profile" className={buttonClassName({ size: "sm" })}>Go to Profile</Link>
+          <Link to="/profile" className={buttonClassName({ size: "sm" })}>{t("Go to Profile")}</Link>
         </div>
       )}
 
       <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-card p-3.5 shadow-soft sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1">
-          <Radar className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Radar className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            aria-label="Filter matches by title or company"
-            placeholder="Filter by title or company…"
+            aria-label={t("Filter matches by title or company")}
+            placeholder={t("Filter by title or company…")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="pl-10"
+            className="ps-10"
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Min score</span>
+          <span className="me-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("Min score")}</span>
           {SCORE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -135,31 +137,31 @@ export function MatchesPage() {
                   : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              {option.label}
+              {t(option.label)}
             </button>
           ))}
         </div>
-        <span className="shrink-0 text-xs text-muted-foreground sm:border-l sm:border-border/70 sm:pl-3">
+        <span className="shrink-0 text-xs text-muted-foreground sm:border-s sm:border-border/70 sm:ps-3">
           {data
             ? data.total > data.items.length
-              ? `Top ${data.items.length} of ${data.total}`
-              : `${data.total} scored`
+              ? t("Top {n} of {total}", { n: data.items.length, total: data.total })
+              : t("{total} scored", { total: data.total })
             : ""}
         </span>
       </div>
 
       {error && data && (
         <p className="rounded-xl border border-red-500/25 bg-red-500/[0.05] p-3 text-sm text-red-700 dark:text-red-400">
-          {error} — showing the last results that loaded.{" "}
-          <button className="font-semibold underline" onClick={load}>Try again</button>
+          {t("{error} — showing the last results that loaded.", { error })}{" "}
+          <button className="font-semibold underline" onClick={load}>{t("Try again")}</button>
         </p>
       )}
 
       {!data || data.items.length === 0 ? (
         <EmptyState
           icon={Radar}
-          title="No matches at this threshold"
-          description="Lower the minimum score or complete your profile to get better matches."
+          title={t("No matches at this threshold")}
+          description={t("Lower the minimum score or complete your profile to get better matches.")}
         />
       ) : (
         <div className="space-y-3">
@@ -172,24 +174,24 @@ export function MatchesPage() {
                 <span className={cn("nums text-[26px] font-bold leading-none tracking-tight", scoreColor(m.score))}>
                   {m.score}
                 </span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">match</span>
+                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("match")}</span>
               </div>
 
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => openDetails(m.job_id)}
-                    title="Open the full posting and its apply link"
-                    className="block max-w-full text-left text-[15px] font-semibold leading-snug transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    title={t("Open the full posting and its apply link")}
+                    className="block max-w-full text-start text-[15px] font-semibold leading-snug transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {m.job?.title}
                   </button>
                   {m.ai_enhanced && (
-                    <Badge variant="default"><Sparkles className="h-3 w-3" /> AI enhanced</Badge>
+                    <Badge variant="default"><Sparkles className="h-3 w-3" /> {t("AI enhanced")}</Badge>
                   )}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {m.job?.company} · {m.job?.location} {m.job?.remote ? "· Remote" : ""} · {m.job?.experience_level || "level n/a"} · {formatSalary(m.job ?? { salary_min: null, salary_max: null, salary_currency: null })} · {postedLabel(m.job ?? { posted_date: null })}
+                  {m.job?.company} · {m.job?.location} {m.job?.remote ? `· ${t("Remote")}` : ""} · {m.job?.experience_level || t("level n/a")} · {formatSalary(m.job ?? { salary_min: null, salary_max: null, salary_currency: null })} · {postedLabel(m.job ?? { posted_date: null })}
                 </p>
                 <div className="mt-3 max-w-[260px]">
                   <ScoreBar value={m.score} />
@@ -209,13 +211,13 @@ export function MatchesPage() {
               <div className="flex shrink-0 flex-row gap-2 sm:flex-col sm:items-end">
                 {m.job?.url && (
                   <Button size="sm" onClick={() => window.open(m.job!.url, "_blank", "noopener")}>
-                    Apply <ExternalLink className="h-3.5 w-3.5" />
+                    {t("Apply")} <ExternalLink className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => setDetail(m)}>Why this score?</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setDetail(m)}>{t("Why this score?")}</Button>
                   <Link to={`/assistant?job=${m.job_id}`} className={buttonClassName({ size: "sm", variant: "ghost" })}>
-                    <Bot className="h-3.5 w-3.5" /> Assistant
+                    <Bot className="h-3.5 w-3.5" /> {t("Assistant")}
                   </Link>
                 </div>
               </div>
@@ -225,22 +227,22 @@ export function MatchesPage() {
       )}
 
       <Dialog open={!!detail} onClose={() => setDetail(null)} wide
-              title={detail?.job ? `${detail.job.title} — match breakdown` : ""}
-              description="How the estimate was calculated">
+              title={detail?.job ? `${detail.job.title} — ${t("match breakdown")}` : ""}
+              description={t("How the estimate was calculated")}>
         {detail && (
           <div className="space-y-5">
             <div className="flex items-center gap-4 rounded-xl border border-border/70 bg-muted/30 p-4">
               <span className={cn("text-4xl font-bold tabular-nums", scoreColor(detail.score))}>{detail.score}</span>
               <div className="flex-1">
                 <ScoreBar value={detail.score} />
-                <p className="mt-2 text-[11px] text-muted-foreground">Deterministic scoring from your profile. Treat as an estimate.</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">{t("Deterministic scoring from your profile. Treat as an estimate.")}</p>
               </div>
             </div>
             <div className="space-y-2">
               {detail.factors.map((f) => (
                 <div key={f.label} className="rounded-xl border border-border/70 p-3.5">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold">{f.label}</p>
+                    <p className="text-sm font-semibold">{t(f.label)}</p>
                     <span className={cn("text-sm font-bold tabular-nums", scoreColor(f.score))}>{f.score}/100</span>
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{f.detail}</p>
@@ -251,8 +253,8 @@ export function MatchesPage() {
               ))}
             </div>
             <div className="rounded-xl border border-border/70 bg-muted/30 p-4 text-sm">
-              <p><span className="font-semibold">Why it matches:</span> {detail.why_match}</p>
-              <p className="mt-2"><span className="font-semibold">Concerns:</span> {detail.concerns}</p>
+              <p><span className="font-semibold">{t("Why it matches:")}</span> {detail.why_match}</p>
+              <p className="mt-2"><span className="font-semibold">{t("Concerns:")}</span> {detail.concerns}</p>
               {detail.hard_gap && (
                 <p className="mt-2 rounded-lg border border-red-500/25 bg-red-500/5 px-3 py-2 text-xs leading-relaxed text-red-700 dark:text-red-400">
                   {detail.hard_gap}
@@ -260,7 +262,7 @@ export function MatchesPage() {
               )}
             </div>
             <div>
-              <p className="text-sm font-semibold">Suggested next steps</p>
+              <p className="text-sm font-semibold">{t("Suggested next steps")}</p>
               <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm leading-relaxed text-muted-foreground">
                 {detail.next_steps.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
@@ -268,11 +270,11 @@ export function MatchesPage() {
             <div className="flex flex-wrap gap-2 border-t border-border/70 pt-4">
               {detail.job?.url && (
                 <Button onClick={() => window.open(detail.job!.url, "_blank", "noopener")}>
-                  Apply on {sourceLabel(detail.job.source)} <ExternalLink className="h-4 w-4" />
+                  {t("Apply on {board}", { board: sourceLabel(detail.job.source) })} <ExternalLink className="h-4 w-4" />
                 </Button>
               )}
               <Button variant="outline" onClick={() => { const id = detail.job_id; setDetail(null); openDetails(id); }}>
-                Open the full posting
+                {t("Open the full posting")}
               </Button>
             </div>
           </div>

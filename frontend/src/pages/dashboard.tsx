@@ -24,15 +24,17 @@ import { ErrorState } from "@/components/ui/error-state";
 import { StatusBadge } from "@/components/jobs/status-badge";
 import { buttonClassName } from "@/components/ui/button";
 import { useAuth } from "@/context/auth";
+import { useI18n } from "@/context/i18n";
+import { translate } from "@/lib/translations";
 import { cn } from "@/lib/utils";
 
 const STATUS_COLORS = ["#323847", "#434b5d", "#555e73", "#687189", "#7c85a0", "#919ab5", "#a7b0c9", "#bdc5da"];
 
 function greeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return translate("Good morning");
+  if (hour < 18) return translate("Good afternoon");
+  return translate("Good evening");
 }
 
 function StatCard({
@@ -62,6 +64,7 @@ function StatCard({
 
 export function DashboardPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -97,7 +100,7 @@ export function DashboardPage() {
   }
 
   const chartData = stats.status_breakdown.map((s, i) => ({
-    name: s.status,
+    name: t(s.status),
     count: s.count,
     fill: STATUS_COLORS[i % STATUS_COLORS.length],
   }));
@@ -106,7 +109,7 @@ export function DashboardPage() {
   const chartMax = Math.max(1, ...chartData.map((d) => d.count));
 
   const firstName = user?.full_name?.trim().split(/\s+/)[0] ?? "there";
-  const today = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  const today = new Date().toLocaleDateString(document.documentElement.lang === "ar" ? "ar-EG" : "en-GB", { weekday: "long", day: "numeric", month: "long" });
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -117,15 +120,15 @@ export function DashboardPage() {
             {greeting()}, {firstName}
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Here is your job hunt today — every number comes from your own data.
+            {t("Here is your job hunt today — every number comes from your own data.")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link to="/jobs" className={buttonClassName()}>
-            <Search className="h-4 w-4" /> Find jobs
+            <Search className="h-4 w-4" /> {t("Find jobs")}
           </Link>
           <Link to="/matches" className={buttonClassName({ variant: "outline" })}>
-            <Radar className="h-4 w-4" /> AI matches
+            <Radar className="h-4 w-4" /> {t("AI matches")}
           </Link>
         </div>
       </div>
@@ -134,30 +137,29 @@ export function DashboardPage() {
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 sm:p-5">
           <UserRound className="h-[18px] w-[18px] shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Your profile needs a little more detail</p>
+            <p className="text-sm font-semibold">{t("Your profile needs a little more detail")}</p>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Match scores get sharper when your skills and experience are filled in.
+              {t("Match scores get sharper when your skills and experience are filled in.")}
             </p>
           </div>
           <Link to="/profile" className={buttonClassName({ size: "sm", variant: "outline" })}>
-            Complete profile
+            {t("Complete profile")}
           </Link>
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard icon={Search} label="Jobs discovered" value={stats.total_jobs} to="/jobs" />
-        <StatCard icon={Award} label="Matches 70+" value={stats.high_match_jobs} to="/matches" />
-        <StatCard icon={Bookmark} label="Saved jobs" value={stats.saved_jobs} to="/saved" />
-        <StatCard icon={ListChecks} label="Applications" value={stats.applications} to="/applications" />
-        <StatCard icon={CalendarClock} label="Interviews" value={stats.interviews} to="/applications" />
-        <StatCard icon={Briefcase} label="Offers" value={stats.offers} to="/applications" />
+        <StatCard icon={Search} label={t("Jobs discovered")} value={stats.total_jobs} to="/jobs" />
+        <StatCard icon={Award} label={t("Matches 70+")} value={stats.high_match_jobs} to="/matches" />
+        <StatCard icon={Bookmark} label={t("Saved jobs")} value={stats.saved_jobs} to="/saved" />
+        <StatCard icon={ListChecks} label={t("Applications")} value={stats.applications} to="/applications" />
+        <StatCard icon={CalendarClock} label={t("Interviews")} value={stats.interviews} to="/applications" />
+        <StatCard icon={Briefcase} label={t("Offers")} value={stats.offers} to="/applications" />
       </div>
 
       {stats.stale_hidden_jobs > 0 && (
         <p className="text-xs text-muted-foreground">
-          {stats.stale_hidden_jobs} posting(s) are hidden from the lists because their source no longer advertises them —
-          the numbers above count live openings only.
+          {t("{count} posting(s) are hidden from the lists because their source no longer advertises them — the numbers above count live openings only.", { count: stats.stale_hidden_jobs })}
         </p>
       )}
 
@@ -165,17 +167,17 @@ export function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-start justify-between space-y-0 pb-3">
             <div className="space-y-1.5">
-              <CardTitle>Best matching jobs</CardTitle>
-              <CardDescription>Highest estimated scores for your profile</CardDescription>
+              <CardTitle>{t("Best matching jobs")}</CardTitle>
+              <CardDescription>{t("Highest estimated scores for your profile")}</CardDescription>
             </div>
             <Link to="/matches" className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">
-              View all <ArrowRight className="h-3.5 w-3.5" />
+              {t("View all")} <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" />
             </Link>
           </CardHeader>
           <CardContent>
             {stats.best_matches.length === 0 ? (
               <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                Complete your profile to see your best matches.
+                {t("Complete your profile to see your best matches.")}
               </p>
             ) : (
               <div className="space-y-2">
@@ -190,7 +192,7 @@ export function DashboardPage() {
                     </span>
                     <span
                       className={cn(
-                        "nums w-7 shrink-0 text-right text-[15px] font-bold tabular-nums tracking-tight",
+                        "nums w-7 shrink-0 text-end text-[15px] font-bold tabular-nums tracking-tight",
                         scoreColor(m.score)
                       )}
                     >
@@ -199,10 +201,10 @@ export function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{m.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {m.company} · {m.location} {m.remote ? "· Remote" : ""}
+                        {m.company} · {m.location} {m.remote ? `· ${t("Remote")}` : ""}
                       </p>
                     </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 rtl:rotate-180 transition-transform ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 group-hover:text-foreground" />
                   </Link>
                 ))}
               </div>
@@ -212,13 +214,13 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle>Application status</CardTitle>
-            <CardDescription>Where your tracked applications stand</CardDescription>
+            <CardTitle>{t("Application status")}</CardTitle>
+            <CardDescription>{t("Where your tracked applications stand")}</CardDescription>
           </CardHeader>
           <CardContent>
             {chartData.length === 0 ? (
               <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No applications tracked yet.
+                {t("No applications tracked yet.")}
               </p>
             ) : (
               <div style={{ height: chartData.length * 44 + 20 }}>
@@ -261,17 +263,17 @@ export function DashboardPage() {
         <Card>
           <CardHeader className="flex-row items-start justify-between space-y-0 pb-3">
             <div className="space-y-1.5">
-              <CardTitle>Recent discoveries</CardTitle>
-              <CardDescription>Latest jobs added to your database</CardDescription>
+              <CardTitle>{t("Recent discoveries")}</CardTitle>
+              <CardDescription>{t("Latest jobs added to your database")}</CardDescription>
             </div>
             <Link to="/jobs" className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">
-              Browse <ArrowRight className="h-3.5 w-3.5" />
+              {t("Browse")} <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" />
             </Link>
           </CardHeader>
           <CardContent className="space-y-1">
             {stats.recent_jobs.length === 0 ? (
               <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                No jobs imported yet — start with Find Jobs.
+                {t("No jobs imported yet — start with Find Jobs.")}
               </p>
             ) : (
               stats.recent_jobs.map((j) => (
@@ -289,15 +291,15 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle>Follow-ups due</CardTitle>
-            <CardDescription>Soonest first — overdue ones are marked</CardDescription>
+            <CardTitle>{t("Follow-ups due")}</CardTitle>
+            <CardDescription>{t("Soonest first — overdue ones are marked")}</CardDescription>
           </CardHeader>
           <CardContent>
             {stats.upcoming_follow_ups.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-center">
                 <BellRing className="h-5 w-5 text-muted-foreground/70" />
                 <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
-                  No follow-ups scheduled yet. Set a follow-up date on an application in the tracker.
+                  {t("No follow-ups scheduled yet. Set a follow-up date on an application in the tracker.")}
                 </p>
               </div>
             ) : (
@@ -310,7 +312,7 @@ export function DashboardPage() {
                     </div>
                     <StatusBadge status={a.status} />
                     {new Date(a.follow_up_date!).getTime() < Date.now() && (
-                      <span className="shrink-0 text-[11px] font-semibold text-red-600 dark:text-red-400">Overdue</span>
+                      <span className="shrink-0 text-[11px] font-semibold text-red-600 dark:text-red-400">{t("Overdue")}</span>
                     )}
                     <span className="shrink-0 text-[11px] font-semibold text-foreground">{formatDate(a.follow_up_date)}</span>
                   </div>

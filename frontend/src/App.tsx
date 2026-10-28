@@ -2,6 +2,7 @@ import { lazy } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from "@/context/theme";
 import { ToastProvider } from "@/context/toast";
+import { I18nProvider } from "@/context/i18n";
 import { AuthProvider, ProtectedRoute } from "@/context/auth";
 import { Layout } from "@/components/layout/layout";
 import { LoginPage } from "@/pages/login";
@@ -21,28 +22,30 @@ const AutomationPage = lazy(() => import("@/pages/automation").then((m) => ({ de
 export default function App() {
   return (
     <ThemeProvider>
-      <ToastProvider>
-        <HashRouter>
-          <AuthProvider>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route element={<ProtectedRoute />}>
-                <Route element={<Layout />}>
-                  <Route path="/" element={<DashboardPage />} />
-                  <Route path="/jobs" element={<FindJobsPage />} />
-                  <Route path="/matches" element={<MatchesPage />} />
-                  <Route path="/saved" element={<SavedJobsPage />} />
-                  <Route path="/applications" element={<ApplicationsPage />} />
-                  <Route path="/profile" element={<ProfilePage />} />
-                  <Route path="/assistant" element={<AssistantPage />} />
-                  <Route path="/automation" element={<AutomationPage />} />
+      <I18nProvider>
+        <ToastProvider>
+          <HashRouter>
+            <AuthProvider>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<Layout />}>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="/jobs" element={<FindJobsPage />} />
+                    <Route path="/matches" element={<MatchesPage />} />
+                    <Route path="/saved" element={<SavedJobsPage />} />
+                    <Route path="/applications" element={<ApplicationsPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/assistant" element={<AssistantPage />} />
+                    <Route path="/automation" element={<AutomationPage />} />
+                  </Route>
                 </Route>
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </AuthProvider>
-        </HashRouter>
-      </ToastProvider>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </AuthProvider>
+          </HashRouter>
+        </ToastProvider>
+      </I18nProvider>
     </ThemeProvider>
   );
 }

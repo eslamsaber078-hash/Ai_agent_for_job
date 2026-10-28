@@ -12,10 +12,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
 import { JobDetailDialog } from "@/components/jobs/job-detail";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 import { cn } from "@/lib/utils";
 
 export function SavedJobsPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [items, setItems] = useState<SavedJob[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -32,15 +34,15 @@ export function SavedJobsPage() {
   };
 
   useEffect(() => {
-    const t = setTimeout(load, 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(load, 300);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
   const remove = async (jobId: number) => {
     try {
       await api.delete(`/api/jobs/${jobId}/save`);
-      toast("Removed from saved jobs");
+      toast(t("Removed from saved jobs"));
       load();
     } catch (e: any) {
       toast(e.message, "error");
@@ -50,18 +52,18 @@ export function SavedJobsPage() {
   return (
     <div className="animate-fade-in space-y-5">
       <PageHeader
-        eyebrow="Shortlist"
-        title="Saved Jobs"
-        description="Jobs you bookmarked for later — review them, prep the application, and apply when you are ready."
+        eyebrow={t("Shortlist")}
+        title={t("Saved Jobs")}
+        description={t("Jobs you bookmarked for later — review them, prep the application, and apply when you are ready.")}
         actions={
           <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              aria-label="Filter saved jobs"
-              placeholder="Filter saved jobs…"
+              aria-label={t("Filter saved jobs")}
+              placeholder={t("Filter saved jobs…")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              className="pl-10"
+              className="ps-10"
             />
           </div>
         }
@@ -69,8 +71,8 @@ export function SavedJobsPage() {
 
       {error && items && (
         <p className="rounded-xl border border-red-500/25 bg-red-500/[0.05] p-3 text-sm text-red-700 dark:text-red-400">
-          {error} — showing the last results that loaded.{" "}
-          <button className="font-semibold underline" onClick={load}>Try again</button>
+          {t("{error} — showing the last results that loaded.", { error })}{" "}
+          <button className="font-semibold underline" onClick={load}>{t("Try again")}</button>
         </p>
       )}
 
@@ -83,11 +85,11 @@ export function SavedJobsPage() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={BookmarkX}
-          title={q ? "No saved jobs match your filter" : "No saved jobs yet"}
-          description={q ? "Try a different filter." : "Browse Find Jobs and bookmark interesting roles to see them here."}
+          title={q ? t("No saved jobs match your filter") : t("No saved jobs yet")}
+          description={q ? t("Try a different filter.") : t("Browse Find Jobs and bookmark interesting roles to see them here.")}
           action={
             !q ? (
-              <Link to="/jobs" className={buttonClassName()}>Find jobs</Link>
+              <Link to="/jobs" className={buttonClassName()}>{t("Find jobs")}</Link>
             ) : undefined
           }
         />
@@ -103,36 +105,36 @@ export function SavedJobsPage() {
                         "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-current/15 bg-muted/50 text-base font-bold tabular-nums",
                         scoreColor(s.score)
                       )}
-                      title="Estimated match score from your profile — not a guarantee"
+                      title={t("Estimated match score from your profile — not a guarantee")}
                     >
                       {s.score}
                     </span>
                   )}
                   <button
                     onClick={() => setSelected(s.job)}
-                    className="min-w-0 text-left text-[15px] font-semibold leading-snug transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="min-w-0 text-start text-[15px] font-semibold leading-snug transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <span className="line-clamp-2">{s.job.title}</span>
                   </button>
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  {s.job.company} · {s.job.location} {s.job.remote ? "· Remote" : ""} · {formatSalary(s.job)}
+                  {s.job.company} · {s.job.location} {s.job.remote ? `· ${t("Remote")}` : ""} · {formatSalary(s.job)}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Saved {formatDate(s.saved_at)} {s.notes ? `· ${s.notes}` : ""}
+                  {t("Saved")} {formatDate(s.saved_at)} {s.notes ? `· ${s.notes}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 {s.job.url && (
                   <Button size="sm" variant="outline" onClick={() => window.open(s.job.url, "_blank", "noopener")}>
-                    <Link2 className="h-4 w-4" /> Apply
+                    <Link2 className="h-4 w-4" /> {t("Apply")}
                   </Button>
                 )}
                 <Link to={`/assistant?job=${s.job.id}`} className={buttonClassName({ size: "sm", variant: "outline" })}>
-                  <Bot className="h-4 w-4" /> Assistant
+                  <Bot className="h-4 w-4" /> {t("Assistant")}
                 </Link>
-                <Button size="sm" variant="ghost" onClick={() => remove(s.job.id)} title="Remove from saved">
-                  <BookmarkX className="h-4 w-4" /> Remove
+                <Button size="sm" variant="ghost" onClick={() => remove(s.job.id)} title={t("Remove from saved")}>
+                  <BookmarkX className="h-4 w-4" /> {t("Remove")}
                 </Button>
               </div>
             </article>

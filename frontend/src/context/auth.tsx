@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Navigate, Outlet } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/context/i18n";
 import { api, ApiError, AUTH_EXPIRED_EVENT } from "@/lib/api";
 
 export interface AuthUser {
@@ -49,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (err instanceof ApiError && err.status === 401) {
         setUser(null);
       } else {
-        setError("مش قادرين نتأكد من حسابك دلوقتي. اتأكد إن السيرفر شغّال والاتصال كويس، وجرّب تاني.");
+        setError("We can't confirm your account right now. Make sure the server is running and the connection is good, then try again.");
       }
     } finally {
       if (version === requestVersion.current) setLoading(false);
@@ -110,21 +111,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const { t } = useI18n();
+
   return (
     <AuthContext.Provider value={{ user, loading, error, busy, retry, login, register, logout }}>
       {loading || error ? (
-        <main dir="rtl" lang="ar" className="flex min-h-screen items-center justify-center bg-background p-4">
+        <main className="flex min-h-screen items-center justify-center bg-background p-4">
           <section className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-sm" aria-busy={loading}>
             {loading ? (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
                 <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                بنطمن على حسابك…
+                {t("Checking your account…")}
               </div>
             ) : (
               <>
-                <h1 className="mb-3 text-lg font-semibold">الاتصال بالسيرفر مش متاح</h1>
-                <p role="alert" className="mb-5 text-sm text-muted-foreground">{error}</p>
-                <Button onClick={() => void retry()}>جرّب تاني</Button>
+                <h1 className="mb-3 text-lg font-semibold">{t("Can't reach the server")}</h1>
+                <p role="alert" className="mb-5 text-sm text-muted-foreground">{t(error ?? "")}</p>
+                <Button onClick={() => void retry()}>{t("Try again")}</Button>
               </>
             )}
           </section>

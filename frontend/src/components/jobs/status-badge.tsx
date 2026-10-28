@@ -1,4 +1,5 @@
 import { APP_STATUSES, type Job, boardLabel, sourceLabel } from "@/lib/types";
+import { useI18n } from "@/context/i18n";
 import { Badge } from "@/components/ui/badge";
 
 const STATUS_STYLES: Record<string, { variant: "default" | "secondary" | "success" | "warning" | "danger" | "outline"; label: string }> = {
@@ -13,10 +14,11 @@ const STATUS_STYLES: Record<string, { variant: "default" | "secondary" | "succes
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
+  const { t } = useI18n();
   const s = STATUS_STYLES[status] ?? { variant: "secondary" as const, label: status };
   return (
     <Badge variant={s.variant} className={className}>
-      {s.label}
+      {t(s.label)}
     </Badge>
   );
 }
@@ -43,8 +45,9 @@ export function JobTags({ job, limit = 5 }: { job: Job; limit?: number }) {
 }
 
 export function SourceBadge({ job }: { job: Job }) {
+  const { t } = useI18n();
   const board = boardLabel(job);
   const source = sourceLabel(job.source);
-  const via = board !== source ? `Imported from ${source}` : undefined;
+  const via = board !== source ? t("Imported from {source}", { source }) : undefined;
   return <Badge variant="secondary" className="shrink-0" title={via}>{board}</Badge>;
 }

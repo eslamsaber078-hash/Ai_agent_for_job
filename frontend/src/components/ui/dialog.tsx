@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/context/i18n";
 import { Button } from "./button";
 
 interface DialogProps {
@@ -23,6 +24,7 @@ const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 export function Dialog({ open, onClose, title, description, children, wide }: DialogProps) {
+  const { t } = useI18n();
   const self = useRef<symbol>(Symbol("dialog")).current;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -103,7 +105,7 @@ export function Dialog({ open, onClose, title, description, children, wide }: Di
           <button
             onClick={onClose}
             className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Close"
+            aria-label={t("Close")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -120,7 +122,7 @@ export function ConfirmDialog({
   onConfirm,
   title,
   message,
-  confirmLabel = "Delete",
+  confirmLabel,
 }: {
   open: boolean;
   onClose: () => void;
@@ -129,11 +131,12 @@ export function ConfirmDialog({
   message: string;
   confirmLabel?: string;
 }) {
+  const { t } = useI18n();
   return (
     <Dialog open={open} onClose={onClose} title={title}>
       <p className="text-sm leading-relaxed text-muted-foreground">{message}</p>
       <div className="mt-6 flex justify-end gap-2">
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>{t("Cancel")}</Button>
         <Button
           variant="destructive"
           onClick={() => {
@@ -141,7 +144,7 @@ export function ConfirmDialog({
             onClose();
           }}
         >
-          {confirmLabel}
+          {confirmLabel ?? t("Delete")}
         </Button>
       </div>
     </Dialog>

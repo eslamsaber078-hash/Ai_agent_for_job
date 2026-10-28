@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Bookmark, BookmarkCheck, ExternalLink } from "lucide-react";
 import { type Job } from "@/lib/types";
 import { formatSalary, plainDescription, postedLabel } from "@/lib/format";
+import { useI18n } from "@/context/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SourceBadge, JobTags } from "./status-badge";
@@ -19,13 +20,14 @@ export const JobCard = memo(function JobCard({
   onTrack?: (job: Job) => void;
   saving?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card p-5 shadow-soft transition-colors duration-200 hover:border-foreground/25 hover:bg-muted/30">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <button
             onClick={() => onOpen?.(job)}
-            className="block w-full text-left text-[15px] font-semibold leading-snug tracking-tight transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="block w-full text-start text-[15px] font-semibold leading-snug tracking-tight transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title={job.title}
           >
             <span className="line-clamp-2">{job.title}</span>
@@ -41,16 +43,16 @@ export const JobCard = memo(function JobCard({
       </div>
 
       <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-        {job.employment_type || "Type n/a"}
+        {job.employment_type || t("Type n/a")}
         <span className="text-muted-foreground/50">·</span>
-        {job.experience_level || "Level n/a"}
+        {job.experience_level || t("Level n/a")}
         {job.remote && (
           <>
             <span className="text-muted-foreground/50">·</span>
-            <span className="text-emerald-700 dark:text-emerald-400">Remote</span>
+            <span className="text-emerald-700 dark:text-emerald-400">{t("Remote")}</span>
           </>
         )}
-        {!job.is_active && <Badge variant="warning" className="ml-1">No longer advertised</Badge>}
+        {!job.is_active && <Badge variant="warning" className="ms-1">{t("No longer advertised")}</Badge>}
       </p>
 
       <p className="mt-3 line-clamp-2 break-words text-[13px] leading-relaxed text-muted-foreground">
@@ -69,17 +71,17 @@ export const JobCard = memo(function JobCard({
 
       <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
         <Button variant="outline" size="sm" onClick={() => onOpen?.(job)}>
-          View details
+          {t("View details")}
         </Button>
         {job.url && (
           <Button variant="ghost" size="sm" onClick={() => window.open(job.url, "_blank", "noopener")}>
-            Apply <ExternalLink className="h-3 w-3" />
+            {t("Apply")} <ExternalLink className="h-3 w-3" />
           </Button>
         )}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ms-auto flex items-center gap-1.5">
           {onTrack && !job.application_status && (
             <Button variant="outline" size="sm" onClick={() => onTrack(job)}>
-              Track
+              {t("Track")}
             </Button>
           )}
           {onSave && (
@@ -89,8 +91,8 @@ export const JobCard = memo(function JobCard({
               className="h-8 w-8"
               disabled={saving}
               onClick={() => onSave(job)}
-              title={job.saved ? "Remove from saved" : "Save job"}
-              aria-label={job.saved ? "Remove from saved" : "Save job"}
+              title={job.saved ? t("Remove from saved") : t("Save job")}
+              aria-label={job.saved ? t("Remove from saved") : t("Save job")}
             >
               {job.saved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <Bookmark className="h-4 w-4" />}
             </Button>

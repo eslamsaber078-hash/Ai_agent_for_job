@@ -26,10 +26,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 import { cn } from "@/lib/utils";
 
 export function AssistantPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [params] = useSearchParams();
   const [jobs, setJobs] = useState<JobLite[]>([]);
   const [jobId, setJobId] = useState<number | "">("");
@@ -98,7 +100,7 @@ export function AssistantPage() {
 
   const generate = async () => {
     if (jobId === "") {
-      toast("Select a job first", "error");
+      toast(t("Select a job first"), "error");
       return;
     }
     setGenerating(true);
@@ -127,9 +129,9 @@ export function AssistantPage() {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(content);
-      toast("Copied to clipboard");
+      toast(t("Copied to clipboard"));
     } catch {
-      toast("Could not copy — select the text and copy manually", "error");
+      toast(t("Could not copy — select the text and copy manually"), "error");
     }
   };
 
@@ -144,7 +146,7 @@ export function AssistantPage() {
     try {
       await api.delete(`/api/assistant/materials/${id}`);
       setMaterials((ms) => ms.filter((m) => m.id !== id));
-      toast("Material deleted");
+      toast(t("Material deleted"));
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -157,7 +159,7 @@ export function AssistantPage() {
    *  his profile proves. */
   const saveCvPdf = async (marked: boolean) => {
     if (jobId === "") {
-      toast("Select a job first", "error");
+      toast(t("Select a job first"), "error");
       return;
     }
     setSavingPdf(marked ? "marked" : "clean");
@@ -167,8 +169,8 @@ export function AssistantPage() {
       saveBlob(blob, fileName(marked ? "CV_review" : "CV", job?.title, job?.company));
       toast(
         marked
-          ? "Review copy saved — the lines the assistant added are printed in red"
-          : "Send copy saved — every line the assistant added is removed, not just uncoloured"
+          ? t("Review copy saved — the lines the assistant added are printed in red")
+          : t("Send copy saved — every line the assistant added is removed, not just uncoloured")
       );
     } catch (e: any) {
       toast(e.message, "error");
@@ -177,8 +179,8 @@ export function AssistantPage() {
     }
   };
 
-  const kindLabel = GENERATION_KINDS.find((k) => k.value === kind)?.label ?? kind;
-  const labelOf = (k: string) => GENERATION_KINDS.find((x) => x.value === k)?.label ?? k;
+  const kindLabel = t(GENERATION_KINDS.find((k) => k.value === kind)?.label ?? kind);
+  const labelOf = (k: string) => t(GENERATION_KINDS.find((x) => x.value === k)?.label ?? k);
   // The panel shows what was generated, which may predate the current dropdown choice.
   const shownKind = result ? result.kind : kind;
   const shownLabel = result ? labelOf(result.kind) : kindLabel;
@@ -189,29 +191,29 @@ export function AssistantPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Apply"
-        title="AI Application Assistant"
-        description="Generate tailored materials from your real profile only — nothing is invented, and nothing is sent for you."
+        eyebrow={t("Apply")}
+        title={t("AI Application Assistant")}
+        description={t("Generate tailored materials from your real profile only — nothing is invented, and nothing is sent for you.")}
       />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle>Generate materials</CardTitle>
-              <CardDescription>Pick the ad, choose what you need, then generate.</CardDescription>
+              <CardTitle>{t("Generate materials")}</CardTitle>
+              <CardDescription>{t("Pick the ad, choose what you need, then generate.")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div>
                 <p className="mb-2 block text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Job
+                  {t("Job")}
                 </p>
                 {loadingJobs ? (
                   <Skeleton className="h-10 rounded-lg" />
                 ) : jobsError ? (
                   <div className="space-y-1.5">
-                    <Select value="" disabled aria-label="Job">
-                      <option value="">Jobs unavailable</option>
+                    <Select value="" disabled aria-label={t("Job")}>
+                      <option value="">{t("Jobs unavailable")}</option>
                     </Select>
                     <p className="text-xs text-red-600 dark:text-red-400">
                       {jobsError}{" "}
@@ -219,30 +221,30 @@ export function AssistantPage() {
                         className="font-medium text-primary hover:underline"
                         onClick={() => setAttempt((a) => a + 1)}
                       >
-                        Retry
+                        {t("Retry")}
                       </button>
                     </p>
                   </div>
                 ) : jobs.length === 0 ? (
                   <div className="space-y-1.5">
-                    <Select value="" disabled aria-label="Job">
-                      <option value="">No jobs stored yet</option>
+                    <Select value="" disabled aria-label={t("Job")}>
+                      <option value="">{t("No jobs stored yet")}</option>
                     </Select>
                     <p className="text-xs text-muted-foreground">
                       <Link to="/jobs" className="font-medium text-primary hover:underline">
-                        Find jobs
+                        {t("Find jobs")}
                       </Link>{" "}
-                      or run a search in{" "}
+                      {t("or run a search in")}{" "}
                       <Link to="/automation" className="font-medium text-primary hover:underline">
-                        Automation Settings
+                        {t("Automation Settings")}
                       </Link>{" "}
-                      first.
+                      {t("first.")}
                     </p>
                   </div>
                 ) : (
                   <Select
                     value={String(jobId)}
-                    aria-label="Job"
+                    aria-label={t("Job")}
                     onChange={(e) => setJobId(e.target.value === "" ? "" : Number(e.target.value))}
                   >
                     {jobs.map((j) => (
@@ -256,7 +258,7 @@ export function AssistantPage() {
 
               <div>
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  What to generate
+                  {t("What to generate")}
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {GENERATION_KINDS.map((k) => (
@@ -266,13 +268,13 @@ export function AssistantPage() {
                       onClick={() => setKind(k.value)}
                       aria-pressed={kind === k.value}
                       className={cn(
-                        "truncate rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "truncate rounded-lg border px-3 py-2 text-start text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                         kind === k.value
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border/80 bg-card text-foreground hover:border-border hover:bg-accent/60"
                       )}
                     >
-                      {k.label}
+                      {t(k.label)}
                     </button>
                   ))}
                 </div>
@@ -283,7 +285,7 @@ export function AssistantPage() {
                   htmlFor="assistant-notes"
                   className="mb-2 block text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
                 >
-                  Extra notes <span className="font-normal normal-case tracking-normal text-muted-foreground/70">(optional)</span>
+                  {t("Extra notes")} <span className="font-normal normal-case tracking-normal text-muted-foreground/70">({t("optional")})</span>
                 </label>
                 <Textarea
                   id="assistant-notes"
@@ -291,17 +293,17 @@ export function AssistantPage() {
                   className="min-h-[72px]"
                   value={extraNotes}
                   onChange={(e) => setExtraNotes(e.target.value)}
-                  placeholder="e.g. Mention my freelance work, keep it under 200 words, highlight my graduation project…"
+                  placeholder={t("e.g. Mention my freelance work, keep it under 200 words, highlight my graduation project…")}
                 />
               </div>
 
               <div className="flex flex-col-reverse items-stretch justify-between gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center">
                 <p className="text-xs text-muted-foreground">
-                  Works with or without an AI key — it falls back to a template built from your profile.
+                  {t("Works with or without an AI key — it falls back to a template built from your profile.")}
                 </p>
                 <Button onClick={generate} disabled={generating || jobId === ""} className="sm:min-w-40">
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {generating ? "Generating…" : `Generate ${kindLabel}`}
+                  {generating ? t("Generating…") : t("Generate {kind}", { kind: kindLabel })}
                 </Button>
               </div>
             </CardContent>
@@ -310,14 +312,14 @@ export function AssistantPage() {
           {result === null && !generating ? (
             <EmptyState
               icon={Bot}
-              title="Nothing generated yet"
-              description={`Pick a job and choose "${kindLabel}", then press Generate. Every draft is built from what you entered in your profile.`}
+              title={t("Nothing generated yet")}
+              description={t('Pick a job and choose "{kind}", then press Generate. Every draft is built from what you entered in your profile.', { kind: kindLabel })}
             />
           ) : generating ? (
             <Card>
               <CardContent className="flex flex-col items-center gap-3 py-14">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Writing your {kindLabel.toLowerCase()}…</p>
+                <p className="text-sm text-muted-foreground">{t("Writing your {kind}…", { kind: kindLabel.toLowerCase() })}</p>
               </CardContent>
             </Card>
           ) : (
@@ -328,12 +330,12 @@ export function AssistantPage() {
                     <CardTitle className="text-base">{shownLabel}</CardTitle>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       {result?.template_based ? (
-                        <Badge variant="warning">Template-based</Badge>
+                        <Badge variant="warning">{t("Template-based")}</Badge>
                       ) : (
-                        <Badge variant="success">AI generated</Badge>
+                        <Badge variant="success">{t("AI generated")}</Badge>
                       )}
                       <span className="text-xs text-muted-foreground">
-                        {previewing ? `${marks.length} additions in red — confirm them` : "Editable before you use it"}
+                        {previewing ? t("{n} additions in red — confirm them", { n: marks.length }) : t("Editable before you use it")}
                       </span>
                     </div>
                   </div>
@@ -345,38 +347,38 @@ export function AssistantPage() {
                           variant="outline"
                           onClick={() => saveCvPdf(true)}
                           disabled={savingPdf !== null}
-                          title="The copy you check first: additions the assistant suggested for this ad are printed red"
+                          title={t("The copy you check first: additions the assistant suggested for this ad are printed red")}
                         >
                           {savingPdf === "marked" ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <FileDown className="h-3.5 w-3.5" />
                           )}{" "}
-                          CV PDF with red marks
+                          {t("CV PDF with red marks")}
                         </Button>
                         <Button
                           size="sm"
                           onClick={() => saveCvPdf(false)}
                           disabled={savingPdf !== null}
-                          title="The ATS-safe copy for the employer: suggested lines are deleted, internal notes never included"
+                          title={t("The ATS-safe copy for the employer: suggested lines are deleted, internal notes never included")}
                         >
                           {savingPdf === "clean" ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <FileDown className="h-3.5 w-3.5" />
                           )}{" "}
-                          Clean CV PDF
+                          {t("Clean CV PDF")}
                         </Button>
                       </>
                     )}
                     <Button size="sm" variant="outline" onClick={copy}>
-                      <Copy className="h-3.5 w-3.5" /> Copy
+                      <Copy className="h-3.5 w-3.5" /> {t("Copy")}
                     </Button>
                     <Button size="sm" variant="outline" onClick={download}>
-                      <Download className="h-3.5 w-3.5" /> Export .txt
+                      <Download className="h-3.5 w-3.5" /> {t("Export .txt")}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={generate} disabled={generating}>
-                      <RefreshCw className="h-3.5 w-3.5" /> Regenerate
+                      <RefreshCw className="h-3.5 w-3.5" /> {t("Regenerate")}
                     </Button>
                   </div>
                 </div>
@@ -393,7 +395,7 @@ export function AssistantPage() {
                       <MarkedText text={content} />
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => setShowMarks(false)}>
-                      <Pencil className="h-3.5 w-3.5" /> Edit the text
+                      <Pencil className="h-3.5 w-3.5" /> {t("Edit the text")}
                     </Button>
                   </>
                 ) : (
@@ -405,7 +407,7 @@ export function AssistantPage() {
                     />
                     {isCv && marks.length > 0 && (
                       <Button size="sm" variant="ghost" onClick={() => setShowMarks(true)}>
-                        <Eye className="h-3.5 w-3.5" /> Preview with red marks
+                        <Eye className="h-3.5 w-3.5" /> {t("Preview with red marks")}
                       </Button>
                     )}
                   </>
@@ -417,16 +419,16 @@ export function AssistantPage() {
 
         <Card className="h-fit xl:sticky xl:top-24">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Generated history</CardTitle>
-            <CardDescription>Materials saved for this job</CardDescription>
+            <CardTitle className="text-base">{t("Generated history")}</CardTitle>
+            <CardDescription>{t("Materials saved for this job")}</CardDescription>
           </CardHeader>
           <CardContent>
             {materials.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/80 px-4 py-8 text-center">
-                <p className="text-sm text-muted-foreground">No saved materials for this job yet.</p>
+                <p className="text-sm text-muted-foreground">{t("No saved materials for this job yet.")}</p>
               </div>
             ) : (
-              <div className="scrollbar-thin max-h-[560px] space-y-2 overflow-y-auto pr-1">
+              <div className="scrollbar-thin max-h-[560px] space-y-2 overflow-y-auto pe-1">
                 {materials.slice(0, 12).map((m) => (
                   <div
                     key={m.id}
@@ -440,15 +442,15 @@ export function AssistantPage() {
                           kind: m.kind,
                           content: m.content,
                           template_based: m.template_based,
-                          warning: "Loaded from history — review before using.",
+                          warning: t("Loaded from history — review before using."),
                         });
                       }}
-                      className="min-w-0 flex-1 text-left focus-visible:outline-none"
+                      className="min-w-0 flex-1 text-start focus-visible:outline-none"
                     >
                       <p className="flex items-center gap-1.5 text-xs font-semibold">
                         {labelOf(m.kind)}
                         <Badge variant={m.template_based ? "warning" : "success"}>
-                          {m.template_based ? "Template" : "AI"}
+                          {m.template_based ? t("Template") : "AI"}
                         </Badge>
                       </p>
                       <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
@@ -459,7 +461,7 @@ export function AssistantPage() {
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7 shrink-0 text-muted-foreground hover:text-red-600"
-                      title="Delete this material"
+                      title={t("Delete this material")}
                       onClick={() => setDeletingMaterial(m.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -478,8 +480,8 @@ export function AssistantPage() {
         onConfirm={() => {
           if (deletingMaterial !== null) void removeMaterial(deletingMaterial);
         }}
-        title="Delete this document"
-        message="This saved draft is removed for good. You can always generate it again, but the AI call costs quota."
+        title={t("Delete this document")}
+        message={t("This saved draft is removed for good. You can always generate it again, but the AI call costs quota.")}
       />
     </div>
   );

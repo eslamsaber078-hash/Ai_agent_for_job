@@ -21,6 +21,7 @@ import { Spinner } from "@/components/ui/skeleton";
 import { ApplyRoute } from "@/components/applications/apply-route";
 import { PackDialog, type Pack } from "@/components/applications/pack-dialog";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 import { cn } from "@/lib/utils";
 import { JobTags, SourceBadge } from "./status-badge";
 
@@ -34,6 +35,7 @@ export function JobDetailDialog({
   onChanged?: (job: Job) => void;
 }) {
   const { toast } = useToast();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [match, setMatch] = useState<MatchResult | null>(null);
   const [matchError, setMatchError] = useState(false);
@@ -68,10 +70,10 @@ export function JobDetailDialog({
     try {
       if (job.saved) {
         await api.delete(`/api/jobs/${job.id}/save`);
-        toast("Removed from saved jobs");
+        toast(t("Removed from saved jobs"));
       } else {
         await api.post(`/api/jobs/${job.id}/save`);
-        toast("Job saved");
+        toast(t("Job saved"));
       }
       // The parent refetches this one job and feeds the fresh object back —
       // mutating `job` in place would edit the list's shared object.
@@ -95,7 +97,7 @@ export function JobDetailDialog({
     try {
       const blob = await api.downloadPdf(`/api/assistant/cv/${jobId}/pdf${qs({ marked: false })}`);
       saveBlob(blob, fileName("CV", job.title, job.company));
-      toast("CV PDF saved — it holds only what your profile proves");
+      toast(t("CV PDF saved — it holds only what your profile proves"));
     } catch (e: any) {
       toast(e.message, "error");
     } finally {
@@ -128,62 +130,62 @@ export function JobDetailDialog({
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <SourceBadge job={job} />
-          {job.remote && <Badge variant="outline">Remote</Badge>}
-          <Badge variant="secondary">{job.employment_type || "Type not specified"}</Badge>
-          <Badge variant="secondary">{job.experience_level || "Level not specified"}</Badge>
+          {job.remote && <Badge variant="outline">{t("Remote")}</Badge>}
+          <Badge variant="secondary">{job.employment_type || t("Type not specified")}</Badge>
+          <Badge variant="secondary">{job.experience_level || t("Level not specified")}</Badge>
           {!job.is_active && (
-            <Badge variant="warning">No longer advertised by {boardLabel(job)}</Badge>
+            <Badge variant="warning">{t("No longer advertised by {board}", { board: boardLabel(job) })}</Badge>
           )}
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-border/80 bg-muted/30 p-3">
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              Salary
+              {t("Salary")}
             </p>
             <p className="mt-1 truncate text-sm font-semibold">{formatSalary(job)}</p>
           </div>
           <div className="rounded-xl border border-border/80 bg-muted/30 p-3">
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              Source
+              {t("Source")}
             </p>
             <p className="mt-1 truncate text-sm font-semibold">{boardLabel(job)}</p>
             {job.publisher && job.publisher !== sourceLabel(job.source) && (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                via {sourceLabel(job.source)}
+                {t("via {source}", { source: sourceLabel(job.source) })}
               </p>
             )}
           </div>
           <div className="rounded-xl border border-border/80 bg-muted/30 p-3">
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              Posted
+              {t("Posted")}
             </p>
             <p className="mt-1 truncate text-sm font-semibold">{postedLabel(job)}</p>
             {job.expiry_date && (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                Expires {formatDate(job.expiry_date)}
+                {t("Expires {date}", { date: formatDate(job.expiry_date) })}
               </p>
             )}
           </div>
           <div className="rounded-xl border border-border/80 bg-muted/30 p-3">
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              Location
+              {t("Location")}
             </p>
-            <p className="mt-1 truncate text-sm font-semibold">{job.location || "Not stated"}</p>
+            <p className="mt-1 truncate text-sm font-semibold">{job.location || t("Not stated")}</p>
             <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{job.country || "—"}</p>
           </div>
         </div>
 
         <section>
-          <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Description</h3>
-          <p className="mt-2 whitespace-pre-line break-words pr-1 text-sm leading-relaxed text-foreground/90 sm:max-h-[280px] sm:overflow-y-auto">
+          <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("Description")}</h3>
+          <p className="mt-2 whitespace-pre-line break-words pe-1 text-sm leading-relaxed text-foreground/90 sm:max-h-[280px] sm:overflow-y-auto">
             {plainDescription(job.description)}
           </p>
         </section>
 
         {job.skills?.length > 0 && (
           <section>
-            <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Skills</h3>
+            <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{t("Skills")}</h3>
             <div className="mt-2">
               <JobTags job={job} limit={20} />
             </div>
@@ -193,7 +195,7 @@ export function JobDetailDialog({
         <section className="rounded-xl border border-border/80 bg-muted/40 p-4">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-              AI match estimate
+              {t("AI match estimate")}
             </h3>
             {match && (
               <span className={cn("text-2xl font-bold tabular-nums", scoreColor(match.score))}>
@@ -204,23 +206,23 @@ export function JobDetailDialog({
           </div>
           {match === null && matchError ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              Match unavailable — the backend could not score this job. Check that it is reachable on port 8000.
+              {t("Match unavailable — the backend could not score this job. Check that it is reachable on port 8000.")}
             </p>
           ) : match === null ? (
             <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="h-4 w-4" /> Calculating…
+              <Spinner className="h-4 w-4" /> {t("Calculating…")}
             </div>
           ) : (
             <div className="mt-3 space-y-3">
               <ScoreBar value={match.score} />
               <p className="text-[11px] text-muted-foreground">
-                Estimate based on your profile — not a guarantee.
+                {t("Estimate based on your profile — not a guarantee.")}
               </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {match.matched_skills?.length > 0 && (
                   <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3">
                     <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-400">
-                      You have
+                      {t("You have")}
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-foreground/90">
                       {match.matched_skills.join(", ")}
@@ -230,7 +232,7 @@ export function JobDetailDialog({
                 {match.missing_skills?.length > 0 && (
                   <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-3">
                     <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-red-700 dark:text-red-400">
-                      Missing / weak
+                      {t("Missing / weak")}
                     </p>
                     <p className="mt-1 text-xs leading-relaxed text-foreground/90">
                       {match.missing_skills.join(", ")}
@@ -254,26 +256,26 @@ export function JobDetailDialog({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-5">
           <Button onClick={prepare} disabled={preparing}>
-            <Bot className="h-4 w-4" /> {preparing ? "Writing your pack…" : "Prepare the application pack"}
+            <Bot className="h-4 w-4" /> {preparing ? t("Writing your pack…") : t("Prepare the application pack")}
           </Button>
           <Button variant="outline" onClick={downloadCv} disabled={savingCv}>
             {savingCv ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-            Download CV PDF
+            {t("Download CV PDF")}
           </Button>
           {job.url && (
             <Button variant="outline" onClick={() => window.open(job.url, "_blank", "noopener")}>
-              Open this ad <ExternalLink className="h-4 w-4" />
+              {t("Open this ad")} <ExternalLink className="h-4 w-4" />
             </Button>
           )}
           <Button variant="outline" onClick={openAssistant}>
-            <Bookmark className="h-4 w-4" /> One document in Assistant
+            <Bookmark className="h-4 w-4" /> {t("One document in Assistant")}
           </Button>
           <Button variant={job.saved ? "secondary" : "outline"} onClick={toggleSave} disabled={saving}>
             {job.saved ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-            {job.saved ? "Saved" : "Save"}
+            {job.saved ? t("Saved") : t("Save")}
           </Button>
           <Button variant="ghost" onClick={onClose}>
-            <X className="h-4 w-4" /> Close
+            <X className="h-4 w-4" /> {t("Close")}
           </Button>
         </div>
       </div>

@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 
 const GROUPS = [
   {
@@ -55,13 +56,14 @@ function initials(name: string): string {
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, logout, busy } = useAuth();
   const { toast } = useToast();
+  const { t } = useI18n();
 
   async function handleLogout() {
     if (busy) return;
     try {
       await logout();
     } catch {
-      toast("مقدرناش نأكد تسجيل الخروج. حسابك لسه مفتوح هنا، جرّب تاني.", "error");
+      toast(t("Couldn't confirm sign-out. Your account is still open here — try again."), "error");
     }
   }
 
@@ -72,8 +74,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[276px] shrink-0 flex-col border-r border-border/70 bg-card/95 backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:translate-x-0",
-          open ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 start-0 z-50 flex w-[276px] shrink-0 flex-col border-e border-border/70 bg-card/95 backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"
         )}
       >
         <div className="flex h-[76px] items-center gap-3 border-b border-border/60 px-5">
@@ -82,12 +84,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-bold leading-tight tracking-tight">JobHunter</p>
-            <p className="truncate text-[11px] text-muted-foreground">Your AI job-search desk</p>
+            <p className="truncate text-[11px] text-muted-foreground">{t("Your AI job-search desk")}</p>
           </div>
           <button
             className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:hidden"
             onClick={onClose}
-            aria-label="Close menu"
+            aria-label={t("Close menu")}
           >
             <X className="h-4 w-4" />
           </button>
@@ -97,7 +99,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           {GROUPS.map((group) => (
             <div key={group.label}>
               <p className="px-3 pb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/80">
-                {group.label}
+                {t(group.label)}
               </p>
               <div className="space-y-1">
                 {group.items.map((item) => (
@@ -116,7 +118,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                     }
                   >
                     <item.icon className="h-4 w-4 shrink-0" strokeWidth={2.1} />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{t(item.label)}</span>
                   </NavLink>
                 ))}
               </div>
@@ -134,15 +136,15 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                 <p className="truncate text-sm font-semibold leading-tight" title={user.full_name}>
                   {user.full_name}
                 </p>
-                <p className="truncate text-[11px] text-muted-foreground">Personal workspace</p>
+                <p className="truncate text-[11px] text-muted-foreground">{t("Personal workspace")}</p>
               </div>
               <button
                 type="button"
                 onClick={() => void handleLogout()}
                 disabled={busy}
                 className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                title="Sign out"
-                aria-label="Sign out"
+                title={t("Sign out")}
+                aria-label={t("Sign out")}
                 aria-busy={busy}
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
@@ -150,7 +152,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             </div>
           )}
           <p className="mt-2.5 px-2 text-[10px] leading-relaxed text-muted-foreground/80">
-            Private to your account. Jobs come from real public sources.
+            {t("Private to your account. Jobs come from real public sources.")}
           </p>
         </div>
       </aside>

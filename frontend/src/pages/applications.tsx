@@ -19,11 +19,13 @@ import { ApplyRouteTag } from "@/components/applications/apply-route";
 import { PackDialog, PackRow, type Pack } from "@/components/applications/pack-dialog";
 import { PageHeader } from "@/components/layout/page-header";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 
 const COLUMNS = ["Discovered", "Interested", "Preparing", "Applied", "Interview", "Offer", "Rejected", "Archived"];
 
 export function ApplicationsPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [items, setItems] = useState<Application[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The table needs 1080px to stay readable; on a phone the board is the honest default.
@@ -63,7 +65,7 @@ export function ApplicationsPage() {
       });
       if (my !== packId.current) return;
       setPack({ job: res.application.job, applicationId: res.application.id, materials: res.materials });
-      toast(`Prepared ${res.materials.length} documents for this ad`);
+      toast(t("Prepared {n} documents for this ad", { n: res.materials.length }));
       load();
     } catch (e: any) {
       if (my === packId.current) toast(e.message, "error");
@@ -89,7 +91,7 @@ export function ApplicationsPage() {
   const changeStatus = async (app: Application, status: string) => {
     try {
       await api.patch(`/api/applications/${app.id}`, { status });
-      toast(`Status changed to ${status}`);
+      toast(t("Status changed to {status}", { status: t(status) }));
       load();
     } catch (e: any) {
       toast(e.message, "error");
@@ -100,7 +102,7 @@ export function ApplicationsPage() {
     if (!deleting) return;
     try {
       await api.delete(`/api/applications/${deleting.id}`);
-      toast("Application deleted");
+      toast(t("Application deleted"));
       load();
     } catch (e: any) {
       toast(e.message, "error");
@@ -111,33 +113,33 @@ export function ApplicationsPage() {
     <select
       value={a.status}
       onChange={(e) => changeStatus(a, e.target.value)}
-      aria-label={`Status for ${a.job.title}`}
+      aria-label={t("Status for {title}", { title: a.job.title })}
       className={
         compact
           ? "h-7 rounded-md border border-input bg-card px-1.5 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           : "h-8 rounded-lg border border-input bg-card px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       }
     >
-      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{t(s)}</option>)}
     </select>
   );
 
   return (
     <div className="animate-fade-in space-y-5">
       <PageHeader
-        eyebrow="Pipeline"
-        title="Applications Desk"
-        description="Press Prepare and the AI writes the CV, letter, email, questions and keywords for that one ad. You read them, you send them — nothing goes out on its own."
+        eyebrow={t("Pipeline")}
+        title={t("Applications Desk")}
+        description={t("Press Prepare and the AI writes the CV, letter, email, questions and keywords for that one ad. You read them, you send them — nothing goes out on its own.")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={statusFilter} aria-label="Filter applications by status" onChange={(e) => setStatusFilter(e.target.value)} className="w-44">
-              <option value="">All statuses</option>
-              {APP_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            <Select value={statusFilter} aria-label={t("Filter applications by status")} onChange={(e) => setStatusFilter(e.target.value)} className="w-44">
+              <option value="">{t("All statuses")}</option>
+              {APP_STATUSES.map((s) => <option key={s} value={s}>{t(s)}</option>)}
             </Select>
             <Tabs
               tabs={[
-                { value: "table", label: "Table" },
-                { value: "kanban", label: "Kanban" },
+                { value: "table", label: t("Table") },
+                { value: "kanban", label: t("Kanban") },
               ]}
               value={view}
               onChange={(v) => setView(v as "table" | "kanban")}
@@ -148,8 +150,8 @@ export function ApplicationsPage() {
 
       {error && items && (
         <p className="rounded-xl border border-red-500/25 bg-red-500/[0.05] p-3 text-sm text-red-700 dark:text-red-400">
-          {error} — showing the last results that loaded.{" "}
-          <button className="font-semibold underline" onClick={load}>Try again</button>
+          {t("{error} — showing the last results that loaded.", { error })}{" "}
+          <button className="font-semibold underline" onClick={load}>{t("Try again")}</button>
         </p>
       )}
 
@@ -162,27 +164,27 @@ export function ApplicationsPage() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={ListChecks}
-          title={statusFilter ? `No applications with status "${statusFilter}"` : "No applications tracked yet"}
+          title={statusFilter ? t('No applications with status "{status}"', { status: t(statusFilter) }) : t("No applications tracked yet")}
           description={statusFilter
-            ? "Clear the status filter to see all of your tracked applications."
-            : "Use the Track button on any job in Find Jobs to start tracking it here."}
+            ? t("Clear the status filter to see all of your tracked applications.")
+            : t("Use the Track button on any job in Find Jobs to start tracking it here.")}
           action={statusFilter
-            ? <Button variant="outline" onClick={() => setStatusFilter("")}>Show all statuses</Button>
-            : <Link to="/jobs" className={buttonClassName()}><Plus className="h-4 w-4" /> Find jobs to track</Link>}
+            ? <Button variant="outline" onClick={() => setStatusFilter("")}>{t("Show all statuses")}</Button>
+            : <Link to="/jobs" className={buttonClassName()}><Plus className="h-4 w-4" /> {t("Find jobs to track")}</Link>}
         />
       ) : view === "table" ? (
         <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-soft">
           <div className="scrollbar-thin overflow-x-auto">
             <table className="w-full min-w-[940px] text-sm">
               <thead>
-                <tr className="border-b border-border/70 bg-muted/50 text-left text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                  <th className="px-3 py-3 font-semibold">Job</th>
-                  <th className="px-3 py-3 font-semibold">Status</th>
-                  <th className="px-3 py-3 font-semibold">How to apply</th>
-                  <th className="px-3 py-3 font-semibold">AI pack</th>
-                  <th className="px-3 py-3 font-semibold">Timeline</th>
-                  <th className="px-3 py-3 font-semibold">Notes</th>
-                  <th className="px-3 py-3 text-right font-semibold">Actions</th>
+                <tr className="border-b border-border/70 bg-muted/50 text-start text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  <th className="px-3 py-3 font-semibold">{t("Job")}</th>
+                  <th className="px-3 py-3 font-semibold">{t("Status")}</th>
+                  <th className="px-3 py-3 font-semibold">{t("How to apply")}</th>
+                  <th className="px-3 py-3 font-semibold">{t("AI pack")}</th>
+                  <th className="px-3 py-3 font-semibold">{t("Timeline")}</th>
+                  <th className="px-3 py-3 font-semibold">{t("Notes")}</th>
+                  <th className="px-3 py-3 text-end font-semibold">{t("Actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -207,13 +209,13 @@ export function ApplicationsPage() {
                     <td className="px-3 py-3.5">
                       <div className="space-y-0.5 whitespace-nowrap text-[11px]">
                         {a.date_applied && (
-                          <p><span className="text-muted-foreground">Applied</span> <span className="tabular-nums">{formatDate(a.date_applied)}</span></p>
+                          <p><span className="text-muted-foreground">{t("Applied")}</span> <span className="tabular-nums">{formatDate(a.date_applied)}</span></p>
                         )}
                         {a.follow_up_date && (
-                          <p><span className="text-muted-foreground">Follow-up</span> <span className="tabular-nums">{formatDate(a.follow_up_date)}</span></p>
+                          <p><span className="text-muted-foreground">{t("Follow-up")}</span> <span className="tabular-nums">{formatDate(a.follow_up_date)}</span></p>
                         )}
                         {a.interview_date && (
-                          <p><span className="text-muted-foreground">Interview</span> <span className="tabular-nums">{formatDate(a.interview_date)}</span></p>
+                          <p><span className="text-muted-foreground">{t("Interview")}</span> <span className="tabular-nums">{formatDate(a.interview_date)}</span></p>
                         )}
                         {!a.date_applied && !a.follow_up_date && !a.interview_date && (
                           <p className="text-muted-foreground">—</p>
@@ -228,22 +230,22 @@ export function ApplicationsPage() {
                     <td className="px-3 py-3.5">
                       <div className="flex justify-end gap-0.5">
                         {a.job.url && (
-                          <Button size="icon" variant="ghost" className="h-8 w-8" title="Open job posting" onClick={() => window.open(a.job.url, "_blank", "noopener")}>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" title={t("Open job posting")} onClick={() => window.open(a.job.url, "_blank", "noopener")}>
                             <ExternalLink className="h-4 w-4" />
                           </Button>
                         )}
                         <Link
                           to={`/assistant?job=${a.job.id}`}
                           className={buttonClassName({ variant: "ghost", size: "icon", className: "h-8 w-8" })}
-                          title="Write one document yourself in the Assistant"
-                          aria-label="Write one document yourself in the Assistant"
+                          title={t("Write one document yourself in the Assistant")}
+                          aria-label={t("Write one document yourself in the Assistant")}
                         >
                           <Bot className="h-4 w-4" />
                         </Link>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit" onClick={() => setEditing(a)}>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title={t("Edit")} onClick={() => setEditing(a)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Delete" onClick={() => setDeleting(a)}>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title={t("Delete")} onClick={() => setDeleting(a)}>
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>
@@ -284,10 +286,10 @@ export function ApplicationsPage() {
                       <div className="mt-2.5 flex items-center justify-between">
                         {statusSelect(a, true)}
                         <div className="flex">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Edit" onClick={() => setEditing(a)}>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title={t("Edit")} onClick={() => setEditing(a)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Delete" onClick={() => setDeleting(a)}>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title={t("Delete")} onClick={() => setDeleting(a)}>
                             <Trash2 className="h-3.5 w-3.5 text-red-500" />
                           </Button>
                         </div>
@@ -295,7 +297,7 @@ export function ApplicationsPage() {
                     </div>
                   ))}
                   {colItems.length === 0 && (
-                    <p className="rounded-lg border border-dashed border-border/80 p-4 text-center text-[11px] text-muted-foreground">Empty</p>
+                    <p className="rounded-lg border border-dashed border-border/80 p-4 text-center text-[11px] text-muted-foreground">{t("Empty")}</p>
                   )}
                 </div>
               </section>
@@ -310,8 +312,8 @@ export function ApplicationsPage() {
         open={!!deleting}
         onClose={() => setDeleting(null)}
         onConfirm={remove}
-        title="Delete application"
-        message={`Remove the application for "${deleting?.job.title}"? This cannot be undone.`}
+        title={t("Delete application")}
+        message={t('Remove the application for "{title}"? This cannot be undone.', { title: deleting?.job.title ?? "" })}
       />
     </div>
   );
@@ -319,6 +321,7 @@ export function ApplicationsPage() {
 
 function EditDialog({ app, onClose, onSaved }: { app: Application | null; onClose: () => void; onSaved: () => void }) {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [status, setStatus] = useState("");
   const [dateApplied, setDateApplied] = useState("");
   const [followUp, setFollowUp] = useState("");
@@ -355,7 +358,7 @@ function EditDialog({ app, onClose, onSaved }: { app: Application | null; onClos
         if (value !== null || existing) patch[field] = value;
       });
       await api.patch(`/api/applications/${app.id}`, patch);
-      toast("Application updated");
+      toast(t("Application updated"));
       onSaved();
     } catch (e: any) {
       toast(e.message, "error");
@@ -365,36 +368,36 @@ function EditDialog({ app, onClose, onSaved }: { app: Application | null; onClos
   };
 
   return (
-    <Dialog open={!!app} onClose={onClose} title={app ? `Edit: ${app.job.title}` : ""} description={app ? `${app.job.company} · ${app.job.location}` : ""}>
+    <Dialog open={!!app} onClose={onClose} title={app ? `${t("Edit")}: ${app.job.title}` : ""} description={app ? `${app.job.company} · ${app.job.location}` : ""}>
       <div className="space-y-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Label>Status</Label>
+            <Label>{t("Status")}</Label>
             <Select value={status} onChange={(e) => setStatus(e.target.value)} className="mt-1.5">
-              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{t(s)}</option>)}
             </Select>
           </div>
           <div>
-            <Label>Date applied</Label>
+            <Label>{t("Date applied")}</Label>
             <Input type="date" value={dateApplied} onChange={(e) => setDateApplied(e.target.value)} className="mt-1.5" />
           </div>
           <div>
-            <Label>Follow-up date</Label>
+            <Label>{t("Follow-up date")}</Label>
             <Input type="date" value={followUp} onChange={(e) => setFollowUp(e.target.value)} className="mt-1.5" />
           </div>
           <div>
-            <Label>Interview date</Label>
+            <Label>{t("Interview date")}</Label>
             <Input type="date" value={interview} onChange={(e) => setInterview(e.target.value)} className="mt-1.5" />
           </div>
         </div>
         <div>
-          <Label>Notes</Label>
+          <Label>{t("Notes")}</Label>
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1.5" rows={4}
-                    placeholder="Contacts, salary expectations, interview feedback…" />
+                    placeholder={t("Contacts, salary expectations, interview feedback…")} />
         </div>
         <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+          <Button variant="ghost" onClick={onClose}>{t("Cancel")}</Button>
+          <Button onClick={save} disabled={saving}>{saving ? t("Saving…") : t("Save changes")}</Button>
         </div>
       </div>
     </Dialog>

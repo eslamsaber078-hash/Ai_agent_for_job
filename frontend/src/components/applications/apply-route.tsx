@@ -3,6 +3,7 @@ import { type Job, boardLabel } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/context/toast";
+import { useI18n } from "@/context/i18n";
 
 const CHANNEL_LABEL: Record<string, string> = {
   email: "Email",
@@ -13,13 +14,14 @@ const CHANNEL_LABEL: Record<string, string> = {
 
 /** A badge naming the route this ad asked for — never a guess. */
 export function ApplyRouteTag({ job }: { job: Job }) {
+  const { t } = useI18n();
   return (
     <Badge
       variant={job.apply_channel === "email" || job.apply_channel === "company-link" ? "success" : "outline"}
       className="whitespace-nowrap text-[10px]"
       title={job.apply_note}
     >
-      {CHANNEL_LABEL[job.apply_channel] ?? "Board page"}
+      {t(CHANNEL_LABEL[job.apply_channel] ?? "Board page")}
     </Badge>
   );
 }
@@ -44,10 +46,11 @@ function mailto(job: Job, body: string): string {
  */
 export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string }) {
   const { toast } = useToast();
+  const { t } = useI18n();
   const copy = (text: string, what: string) => {
     navigator.clipboard.writeText(text)
-      .then(() => toast(`${what} copied`))
-      .catch(() => toast("Could not copy — select it manually", "error"));
+      .then(() => toast(t("{what} copied", { what })))
+      .catch(() => toast(t("Could not copy — select it manually"), "error"));
   };
   const mailHref = mailto(job, emailBody || `Dear Hiring Team,\n\nI am applying for ${job.title}.\n\n[Your name]`);
   const link = job.apply_links[0];
@@ -56,7 +59,7 @@ export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string })
     <div className="rounded-xl border border-border/80 bg-muted/40 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          How to apply
+          {t("How to apply")}
         </p>
         <ApplyRouteTag job={job} />
       </div>
@@ -68,24 +71,24 @@ export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string })
             href={mailHref}
             className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3.5 text-xs font-semibold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90"
           >
-            <Mail className="h-3.5 w-3.5" /> Open the mail draft
+            <Mail className="h-3.5 w-3.5" /> {t("Open the mail draft")}
           </a>
         )}
         {job.apply_channel === "company-link" && link && (
           <Button size="sm" onClick={() => window.open(link, "_blank", "noopener")}>
-            <ExternalLink className="h-3.5 w-3.5" /> Open the company page
+            <ExternalLink className="h-3.5 w-3.5" /> {t("Open the company page")}
           </Button>
         )}
         {(job.apply_channel === "listing" || job.apply_channel === "unknown") && job.url && (
           <Button size="sm" onClick={() => window.open(job.url, "_blank", "noopener")}>
-            <ExternalLink className="h-3.5 w-3.5" /> Apply on {boardLabel(job)}
+            <ExternalLink className="h-3.5 w-3.5" /> {t("Apply on {board}", { board: boardLabel(job) })}
           </Button>
         )}
         {job.apply_emails.map((e) => (
           <button
             key={e}
-            onClick={() => copy(e, "Address")}
-            title="Copy this address"
+            onClick={() => copy(e, t("Address"))}
+            title={t("Copy this address")}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
           >
             <Mail className="h-3 w-3 text-muted-foreground" /> {e}
@@ -96,7 +99,7 @@ export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string })
           <button
             key={l}
             onClick={() => window.open(l, "_blank", "noopener")}
-            title="Open this page"
+            title={t("Open this page")}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
           >
             <ExternalLink className="h-3 w-3 text-muted-foreground" />
@@ -106,8 +109,7 @@ export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string })
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-        Read from the ad itself. Nothing leaves this app: the mail draft only opens in your own program,
-        and you press send.
+        {t("Read from the ad itself. Nothing leaves this app: the mail draft only opens in your own program, and you press send.")}
       </p>
     </div>
   );

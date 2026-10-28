@@ -4,12 +4,14 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { TopProgress } from "@/components/layout/top-progress";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { useI18n } from "@/context/i18n";
 
 // Shown for the moment a page's own file is still arriving. It stands where the page
 // will stand, with the sidebar and top bar still in place, so the screen never jumps.
 function PageGap() {
+  const { t } = useI18n();
   return (
-    <div className="space-y-3 py-2" aria-busy="true" aria-label="Loading this page">
+    <div className="space-y-3 py-2" aria-busy="true" aria-label={t("Loading this page")}>
       {[0, 1, 2].map((i) => (
         <div key={i} className="h-16 animate-pulse rounded-xl border bg-muted/30" />
       ))}
