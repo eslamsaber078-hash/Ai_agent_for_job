@@ -277,7 +277,7 @@ def test_registration_validation_is_safe_and_does_not_create_rows(auth_client, c
         assert db.query(AuthSession).count() == 0
 
 
-@pytest.mark.parametrize("password", ["p" * 8, "p" * 128])
+@pytest.mark.parametrize("password", ["p" * 6, "p" * 128])
 def test_password_length_boundaries(auth_client, password):
     assert register(auth_client, password=password).status_code == 201
     assert login(auth_client, password=password).status_code == 200

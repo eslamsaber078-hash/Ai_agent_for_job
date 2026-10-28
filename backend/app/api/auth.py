@@ -64,7 +64,7 @@ class LoginIn(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
 
     phone: str = Field(min_length=1, max_length=32)
-    password: SecretStr = Field(min_length=8, max_length=128)
+    password: SecretStr = Field(min_length=6, max_length=128)
 
     @field_validator("phone")
     @classmethod

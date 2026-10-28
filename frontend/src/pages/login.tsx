@@ -43,7 +43,7 @@ function authError(err: unknown, registering: boolean): string {
     if (err.status === 401) return "رقم الموبايل أو كلمة السر مش صح. راجعهم وجرّب تاني.";
     if (err.status === 409 && registering) return "رقم الموبايل ده عليه حساب بالفعل. جرّب تدخل لحسابك.";
     if (err.status === 400 || err.status === 422) {
-      return "راجع البيانات ورقم الموبايل. كلمة السر لازم تكون من ٨ لـ١٢٨ حرف.";
+      return "راجع البيانات ورقم الموبايل. كلمة السر لازم تكون من ٦ لـ١٢٨ حرف.";
     }
     if (err.status === 429) return "محاولات كتير في وقت قصير. استنى شوية وجرّب تاني.";
   }
@@ -90,8 +90,8 @@ export function LoginPage() {
       setError("رقم الموبايل أرقام بس — اكتبه زي 01xxxxxxxxx أو +20xxxxxxxxxx.");
       return;
     }
-    if (password.length < 8 || password.length > 128) {
-      setError("كلمة السر لازم تكون من ٨ لـ١٢٨ حرف.");
+    if (password.length < 6 || password.length > 128) {
+      setError("كلمة السر لازم تكون من ٦ لـ١٢٨ حرف.");
       return;
     }
     if (registering && password !== confirmation) {
@@ -226,7 +226,7 @@ export function LoginPage() {
                 onSubmit={submit}
                 aria-busy={disabled}
                 className="mt-6"
-                onInvalidCapture={() => setError("راجع البيانات المطلوبة. كلمة السر لازم تكون من ٨ لـ١٢٨ حرف.")}
+                onInvalidCapture={() => setError("راجع البيانات المطلوبة. كلمة السر لازم تكون من ٦ لـ١٢٨ حرف.")}
               >
                 <fieldset disabled={disabled} className="space-y-4">
                   {registering && (
@@ -281,7 +281,7 @@ export function LoginPage() {
                         autoComplete={registering ? "new-password" : "current-password"}
                         dir="ltr"
                         required
-                        minLength={8}
+                        minLength={6}
                         maxLength={128}
                         aria-describedby="auth-password-help"
                         className="h-11 pl-11 pr-10"
@@ -297,7 +297,7 @@ export function LoginPage() {
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
-                    <p id="auth-password-help" className="text-[11px] text-muted-foreground">من ٨ لـ١٢٨ حرف.</p>
+                    <p id="auth-password-help" className="text-[11px] text-muted-foreground">من ٦ لـ١٢٨ حرف.</p>
                   </div>
 
                   {registering && (
@@ -313,7 +313,7 @@ export function LoginPage() {
                           autoComplete="new-password"
                           dir="ltr"
                           required
-                          minLength={8}
+                          minLength={6}
                           maxLength={128}
                           className="h-11 pr-10"
                           value={confirmation}
