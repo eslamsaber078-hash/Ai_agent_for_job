@@ -67,6 +67,7 @@ def test_remotive_parses_date_without_offset_as_utc():
 
 
 def test_discovery_skips_dead_postings_and_logs_it(client, monkeypatch):
+    """Every posting the fake site sends is for the owner's own trade; only age separates them."""
     from app.services import providers as providers_mod
 
     class DeadProvider(providers_mod.BaseProvider):
@@ -75,11 +76,11 @@ def test_discovery_skips_dead_postings_and_logs_it(client, monkeypatch):
 
         def fetch(self, titles, skills, locations, remote_only):
             return [
-                ProviderJob(source="deadprov", external_id="live-1", title="Live Junior Flutter Dev",
+                ProviderJob(source="deadprov", external_id="live-1", title="Live Junior Flutter Developer",
                             posted_date=datetime.now(timezone.utc)),
-                ProviderJob(source="deadprov", external_id="old-1", title="Months Old Ad",
+                ProviderJob(source="deadprov", external_id="old-1", title="Months Old Flutter Developer",
                             posted_date=_days_ago(90)),
-                ProviderJob(source="deadprov", external_id="exp-1", title="Expired Ad",
+                ProviderJob(source="deadprov", external_id="exp-1", title="Expired Flutter Developer",
                             posted_date=_days_ago(5), expiry_date=_days_ago(1)),
             ]
 
@@ -87,15 +88,15 @@ def test_discovery_skips_dead_postings_and_logs_it(client, monkeypatch):
     db = SessionLocal()
     try:
         providers_mod.ensure_sources(db)
-        total, lines = run_discovery(db, [], [], [], False, ["deadprov"])
+        total, lines = run_discovery(db, ["Flutter Developer"], [], [], False, ["deadprov"])
         titles = {j.title for j in db.query(Job).filter(Job.source == "deadprov").all()}
     finally:
         db.close()
 
     assert total == 1
-    assert "Live Junior Flutter Dev" in titles
-    assert "Months Old Ad" not in titles
-    assert "Expired Ad" not in titles
+    assert "Live Junior Flutter Developer" in titles
+    assert "Months Old Flutter Developer" not in titles
+    assert "Expired Flutter Developer" not in titles
     assert any("skipped as no longer live" in line for line in lines)
 
 
@@ -221,19 +222,19 @@ def test_an_undated_stored_posting_gets_dated_and_hidden(client, monkeypatch):
         label = "Old feed"
 
         def fetch(self, titles, skills, locations, remote_only):
-            return [ProviderJob(source="oldfeed", external_id="ad-1", title="Ancient Ad",
+            return [ProviderJob(source="oldfeed", external_id="ad-1", title="Ancient Flutter Developer",
                                 posted_date=_days_ago(120))]
 
     monkeypatch.setitem(providers_mod.REGISTRY, "oldfeed", OldFeedProvider)
     db = SessionLocal()
     try:
         providers_mod.ensure_sources(db)
-        job = Job(external_id="ad-1", source="oldfeed", title="Ancient Ad", company="Co",
+        job = Job(external_id="ad-1", source="oldfeed", title="Ancient Flutter Developer", company="Co",
                   posted_date=None, is_active=True)
         db.add(job)
         db.commit()
 
-        _, lines = run_discovery(db, [], [], [], False, ["oldfeed"])
+        _, lines = run_discovery(db, ["Flutter Developer"], [], [], False, ["oldfeed"])
         db.refresh(job)
         assert job.posted_date is not None  # dated from the feed
         assert job.is_active is False  # and therefore out of the live lists
@@ -243,7 +244,11 @@ def test_an_undated_stored_posting_gets_dated_and_hidden(client, monkeypatch):
 
 
 def test_a_feed_that_sends_no_dates_still_ages_out(client, monkeypatch):
-    """An undated row was invisible to the freshness rule, so it stayed live forever."""
+    """An ad with no posting date is shown only while its source keeps advertising it.
+
+    Inventing a date for it made 929 months-old postings look hours fresh; the honest
+    anchor is the last time the board itself listed the ad.
+    """
     from app.services import providers as providers_mod
 
     class BlindProvider(providers_mod.BaseProvider):
@@ -251,23 +256,23 @@ def test_a_feed_that_sends_no_dates_still_ages_out(client, monkeypatch):
         label = "Blind feed"
 
         def fetch(self, titles, skills, locations, remote_only):
-            return [ProviderJob(source="blindfeed", external_id="b-1", title="Undated Ad",
+            return [ProviderJob(source="blindfeed", external_id="b-1", title="Undated Flutter Developer",
                                 company="Co", url="http://b/1")]
 
     monkeypatch.setitem(providers_mod.REGISTRY, "blindfeed", BlindProvider)
     db = SessionLocal()
     try:
         providers_mod.ensure_sources(db)
-        run_discovery(db, [], [], [], False, ["blindfeed"], max_age_days=30)
+        run_discovery(db, ["Flutter Developer"], [], [], False, ["blindfeed"], max_age_days=30)
         job = db.query(Job).filter(Job.source == "blindfeed").one()
-        assert job.posted_date is not None  # dated the moment we first saw it
-        assert job.is_active is True
+        assert job.posted_date is None  # nothing was invented
+        assert job.date_kind == "unknown"
+        assert job.is_active is True  # the board listed it during this run
 
-        job.posted_date = _days_ago(200)  # months of re-listing without a real date
+        job.last_seen = _days_ago(45)  # the board stopped repeating it
         db.commit()
-        run_discovery(db, [], [], [], False, ["blindfeed"], max_age_days=30)
+        run_discovery(db, ["Flutter Developer"], [], [], False, ["other"], max_age_days=30)
         db.refresh(job)
         assert job.is_active is False
-        assert job.posted_date < _days_ago(190)  # the first-seen date is not refreshed away
     finally:
         db.close()

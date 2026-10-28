@@ -1,11 +1,12 @@
-import { Bookmark, BookmarkCheck, Briefcase, Building2, Calendar, ExternalLink, MapPin, Wallet } from "lucide-react";
+import { memo } from "react";
+import { Bookmark, BookmarkCheck, ExternalLink } from "lucide-react";
 import { type Job } from "@/lib/types";
-import { formatSalary, timeAgo } from "@/lib/format";
+import { formatSalary, plainDescription, postedLabel } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SourceBadge, JobTags } from "./status-badge";
 
-export function JobCard({
+export const JobCard = memo(function JobCard({
   job,
   onSave,
   onOpen,
@@ -19,53 +20,54 @@ export function JobCard({
   saving?: boolean;
 }) {
   return (
-    <div className="group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
+    <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card p-5 shadow-soft transition-colors duration-200 hover:border-foreground/25 hover:bg-muted/30">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <button
             onClick={() => onOpen?.(job)}
-            className="block w-full truncate text-left text-sm font-semibold hover:text-primary hover:underline"
+            className="block w-full text-left text-[15px] font-semibold leading-snug tracking-tight transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             title={job.title}
           >
-            {job.title}
+            <span className="line-clamp-2">{job.title}</span>
           </button>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 break-words text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <Building2 className="h-3 w-3" /> {job.company}
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3 w-3" /> {job.location}
-              {job.country && job.country !== job.location ? `, ${job.country}` : ""}
-            </span>
-            {job.remote && <Badge variant="outline" className="text-[10px]">Remote</Badge>}
-          </div>
+          <p className="mt-1.5 truncate text-[13px] text-muted-foreground" title={`${job.company} · ${job.location}`}>
+            {job.company}
+            <span className="mx-1.5 text-muted-foreground/50">·</span>
+            {job.location}
+            {job.country && job.country !== job.location ? `, ${job.country}` : ""}
+          </p>
         </div>
         <SourceBadge job={job} />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 break-words text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <Briefcase className="h-3 w-3" /> {job.employment_type || "Not specified"}
-        </span>
-        <span>{job.experience_level || "Level not specified"}</span>
-        <span className="inline-flex items-center gap-1">
-          <Wallet className="h-3 w-3" /> {formatSalary(job)}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Calendar className="h-3 w-3" /> {timeAgo(job.posted_date)}
-        </span>
-        {!job.is_active && (
-          <Badge variant="warning" className="text-[10px]">No longer advertised at the source</Badge>
+      <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+        {job.employment_type || "Type n/a"}
+        <span className="text-muted-foreground/50">·</span>
+        {job.experience_level || "Level n/a"}
+        {job.remote && (
+          <>
+            <span className="text-muted-foreground/50">·</span>
+            <span className="text-emerald-700 dark:text-emerald-400">Remote</span>
+          </>
         )}
-      </div>
+        {!job.is_active && <Badge variant="warning" className="ml-1">No longer advertised</Badge>}
+      </p>
 
-      <p className="mt-3 line-clamp-2 break-words text-sm text-muted-foreground">{job.description}</p>
+      <p className="mt-3 line-clamp-2 break-words text-[13px] leading-relaxed text-muted-foreground">
+        {plainDescription(job.description)}
+      </p>
 
       <div className="mt-3 min-w-0">
-        <JobTags job={job} />
+        <JobTags job={job} limit={4} />
       </div>
 
-      <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-3">
+      <p className="nums mt-3.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+        {formatSalary(job)}
+        <span className="text-muted-foreground/50">·</span>
+        {postedLabel(job)}
+      </p>
+
+      <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
         <Button variant="outline" size="sm" onClick={() => onOpen?.(job)}>
           View details
         </Button>
@@ -74,7 +76,7 @@ export function JobCard({
             Apply <ExternalLink className="h-3 w-3" />
           </Button>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           {onTrack && !job.application_status && (
             <Button variant="outline" size="sm" onClick={() => onTrack(job)}>
               Track
@@ -83,16 +85,18 @@ export function JobCard({
           {onSave && (
             <Button
               variant={job.saved ? "secondary" : "ghost"}
-              size="sm"
+              size="icon"
+              className="h-8 w-8"
               disabled={saving}
               onClick={() => onSave(job)}
               title={job.saved ? "Remove from saved" : "Save job"}
+              aria-label={job.saved ? "Remove from saved" : "Save job"}
             >
               {job.saved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <Bookmark className="h-4 w-4" />}
             </Button>
           )}
         </div>
       </div>
-    </div>
+    </article>
   );
-}
+});

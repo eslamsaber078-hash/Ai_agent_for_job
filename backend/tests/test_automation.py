@@ -78,6 +78,7 @@ def test_manual_run_with_settings_discovers_jobs(client):
 
 
 def test_runs_are_listed(client):
+    assert client.put("/api/profile", json={"desired_titles": ["Flutter Developer"]}).status_code == 200
     client.post("/api/automation/run", json=["remotive"])
     r = client.get("/api/automation/runs")
     assert r.status_code == 200

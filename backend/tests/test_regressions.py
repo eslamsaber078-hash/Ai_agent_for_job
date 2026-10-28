@@ -220,7 +220,7 @@ def test_patch_application_can_clear_a_date(client):
 def test_first_run_ticks_the_registered_sources(client):
     """An empty sources list silently means 'everything', which the UI cannot show ticked."""
     from app.models import SearchPreference
-    from app.services import REGISTRY, ensure_default_sources
+    from app.services import REGISTRY, ensure_sources
 
     db = SessionLocal()
     try:
@@ -228,13 +228,13 @@ def test_first_run_ticks_the_registered_sources(client):
         pref.sources = []
         db.add(pref)
         db.commit()
-        ensure_default_sources(db)
+        ensure_sources(db)
         assert set(pref.sources) == set(REGISTRY)
         assert {"himalayas", "workingnomads"} <= set(pref.sources)  # newly added sites tick too
 
         pref.sources = ["remotive"]
         db.commit()
-        ensure_default_sources(db)  # never overwrites a user's choice
+        ensure_sources(db)  # never overwrites a user's choice
         assert pref.sources == ["remotive"]
     finally:
         db.close()

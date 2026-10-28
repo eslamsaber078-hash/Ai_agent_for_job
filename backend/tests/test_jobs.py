@@ -87,12 +87,60 @@ def test_save_and_unsave(client):
     assert client.get("/api/saved-jobs").json() == []
 
 
+def test_a_paged_list_shows_every_posting_once_in_the_same_order(client):
+    """The newest-first list is now ordered by SQL, so the tiebreaker has to be real.
+
+    Two pages that disagree on where equal rows go would show him the same posting
+    twice and hide another one — the classic paging bug.
+    """
+    for sort in ("date", "title", "company"):
+        pages: list[int] = []
+        page = 1
+        while True:
+            body = client.get("/api/jobs", params={"sort": sort, "page": page, "page_size": 7}).json()
+            pages.extend(j["id"] for j in body["items"])
+            if page >= body["pages"]:
+                break
+            page += 1
+        assert len(pages) == len(set(pages)), sort
+        whole = [j["id"] for j in client.get("/api/jobs", params={"sort": sort, "page_size": 100}).json()["items"]]
+        assert pages == whole, sort
+
+
+def _owner_describes_their_trade(client, titles: list[str]) -> None:
+    """Every import now searches and keeps only what matches the owner's own wording."""
+    assert client.put("/api/profile", json={"desired_titles": titles}).status_code == 200
+
+
 def test_refresh_endpoint(client):
+    _owner_describes_their_trade(client, ["Flutter Developer"])
     r = client.post("/api/jobs/refresh", json=["remotive"])
     assert r.status_code == 200
     body = r.json()
     assert "jobs_new" in body
     assert any("Remotive" in line for line in body["log"])
+
+
+def test_a_site_that_was_fetched_but_kept_nothing_is_not_called_unimported(client, monkeypatch):
+    """A button that reads "Never imported" right after its own import ran looks broken.
+
+    The run history is what tells a fetched-but-gated site apart from one never touched,
+    and a key-gated site without its key is neither — it never ran at all.
+    """
+    from app import config
+
+    monkeypatch.setattr(config, "RAPIDAPI_KEY", "", raising=False)
+    _owner_describes_their_trade(client, ["Flutter Developer"])
+    before = {s["name"]: s for s in client.get("/api/jobs/sources").json()}
+    assert before["weworkremotely"]["fetched_at"] is None
+    assert before["jsearch"]["key_ready"] is False  # no key: the site cannot have run
+    assert before["remotive"]["key_ready"] is True  # keyless sites are always ready
+
+    client.post("/api/jobs/refresh", json=["weworkremotely"])
+
+    after = {s["name"]: s for s in client.get("/api/jobs/sources").json()}
+    assert after["weworkremotely"]["fetched_at"] is not None
+    assert after["jsearch"]["fetched_at"] is None  # the other site was not part of that run
 
 
 def test_remotive_provider_handles_api_failure(monkeypatch):
@@ -264,6 +312,117 @@ def test_ingest_updates_existing_job():
         db.close()
 
 
+def test_republished_post_with_a_new_board_id_is_not_stored_twice():
+    """Arbeitnow re-advertises the same opening under a fresh URL id each run."""
+    db = SessionLocal()
+    try:
+        from app.services.providers import ingest_jobs
+
+        base = dict(source="test", title="Senior Rust Engineer", company="Rustworks")
+        first = ProviderJob(external_id="a1", url="https://rustworks.example/jobs/senior-rust-engineer-london-262635", **base)
+        again = ProviderJob(external_id="a2", url="https://rustworks.example/jobs/senior-rust-engineer-london-146596", **base)
+        assert ingest_jobs(db, [first]) == (1, 0)
+        assert ingest_jobs(db, [again]) == (0, 0)
+        assert db.query(Job).filter(Job.company == "Rustworks").count() == 1
+
+        numeric = ProviderJob(external_id="n9", url="https://other.example/job/1234", **base)
+        other = ProviderJob(external_id="n8", url="https://other.example/job/5678", **base)
+        assert ingest_jobs(db, [numeric, other]) == (2, 0)  # ids, not slugs: separate ads
+    finally:
+        db.close()
+
+
+def test_an_undated_feed_leaves_the_date_empty_instead_of_inventing_one():
+    """Himalayas sends a date that is generated when the feed is built; storing "today"
+    for every one of its ads made 929 jobs look hours old."""
+    db = SessionLocal()
+    try:
+        from app.services.providers import ingest_jobs
+        pj = ProviderJob(source="himalayas", external_id="h1", title="Flutter Dev", company="ACME")
+        assert ingest_jobs(db, [pj]) == (1, 0)
+        job = db.query(Job).filter(Job.external_id == "h1").one()
+        assert job.posted_date is None
+        assert job.date_kind == "unknown"
+    finally:
+        db.close()
+
+
+def test_a_board_that_re_stamps_an_ad_never_makes_it_younger():
+    db = SessionLocal()
+    try:
+        from app.services.providers import hide_stale_jobs, ingest_jobs
+        old = datetime.now(timezone.utc) - timedelta(days=90)
+        first = ProviderJob(source="test", external_id="s1", title="PHP Dev", company="ACME",
+                            posted_date=old)
+        ingest_jobs(db, [first])
+        re_stamped = ProviderJob(source="test", external_id="s1", title="PHP Dev", company="ACME",
+                                 posted_date=datetime.now(timezone.utc))
+        ingest_jobs(db, [re_stamped])
+        job = db.query(Job).filter(Job.external_id == "s1").one()
+        assert job.posted_date.date() == old.date()
+        assert hide_stale_jobs(db, 30) == 1
+    finally:
+        db.close()
+
+
+def test_a_date_that_arrives_later_is_still_used():
+    """An ad stored before the relative-date parser existed gets its real age on the next run."""
+    db = SessionLocal()
+    try:
+        from app.services.providers import ingest_jobs
+        ingest_jobs(db, [ProviderJob(source="jsearch", external_id="j1", title="QA Dev", company="ACME")])
+        real = datetime.now(timezone.utc) - timedelta(days=40)
+        ingest_jobs(db, [ProviderJob(source="jsearch", external_id="j1", title="QA Dev",
+                                     company="ACME", posted_date=real)])
+        job = db.query(Job).filter(Job.external_id == "j1").one()
+        assert job.posted_date.date() == real.date()
+    finally:
+        db.close()
+
+
+def test_an_undated_ad_only_ages_out_when_its_source_stops_listing_it():
+    db = SessionLocal()
+    try:
+        from app.services.providers import hide_stale_jobs, ingest_jobs
+        now = datetime.now(timezone.utc)
+        for ext, seen in (("fresh", now), ("abandoned", now - timedelta(days=45))):
+            ingest_jobs(db, [ProviderJob(source="himalayas", external_id=ext,
+                                         title=f"{ext} dev", company="ACME")])
+        db.query(Job).filter(Job.external_id == "abandoned").update(
+            {Job.last_seen: now - timedelta(days=45)}, synchronize_session=False)
+        db.commit()
+        assert hide_stale_jobs(db, 30) == 1
+        assert db.query(Job).filter(Job.external_id == "fresh", Job.is_active.is_(True)).count() == 1
+    finally:
+        db.close()
+
+
+def test_feed_words_that_only_say_when_are_turned_into_a_real_date():
+    from app.services.providers import _relative_to_date
+
+    now = datetime.now(timezone.utc)
+    for text, days in (("قبل ١١ يومًا", 11), ("منذ 3 أيام", 3), ("11 days ago", 11),
+                       ("3 weeks ago", 21), ("2 months ago", 60)):
+        parsed = _relative_to_date(text)
+        assert parsed is not None, text
+        assert abs((now - parsed).total_seconds() - days * 86400) < 3600, text
+    assert (_relative_to_date("Today") - now).total_seconds() < 60
+    assert _relative_to_date("just posted") is not None
+    assert _relative_to_date("") is None
+    assert _relative_to_date("soon") is None
+
+
+def test_a_crawl_stamped_source_is_labelled_as_listing_not_posting():
+    db = SessionLocal()
+    try:
+        from app.services.providers import ingest_jobs
+        ingest_jobs(db, [ProviderJob(source="arbeitnow", external_id="a1", title="Go Dev",
+                                     company="ACME", posted_date=datetime.now(timezone.utc))])
+        assert db.query(Job).filter(Job.external_id == "a1").one().date_kind == "listed"
+    finally:
+        db.close()
+
+
 WWR_RSS_SAMPLE = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
   <title>We Work Remotely</title>
@@ -407,7 +566,11 @@ def test_sources_endpoint_lists_every_registered_site_with_live_counts(client):
     assert set(sources) == set(REGISTRY)
     assert sources["remotive"]["live_jobs"] >= 20  # the fixture jobs
     assert sources["weworkremotely"]["live_jobs"] == 0  # listed before its first import
-    assert all(s["requires_key"] is False for s in sources.values())
+    assert all(s["requires_key"] is False for s in sources.values()
+               if s["name"] not in {"jsearch", "jooble", "adzuna"})
+    assert sources["jsearch"]["requires_key"] is True
+    assert sources["jooble"]["requires_key"] is True  # silent until its free key is set
+    assert sources["adzuna"]["requires_key"] is True  # silent until its free key pair is set
 
 
 def test_refresh_searches_with_the_saved_preferences(client, monkeypatch):
@@ -452,7 +615,7 @@ def test_per_site_import_fetches_only_that_site(client, monkeypatch):
             def fetch(self, titles, skills, locations, remote_only):
                 fetched.append(name)
                 return [ProviderJob(source=name, external_id=f"{name}-1",
-                                    title=f"{name} posting", posted_date=datetime.now(timezone.utc))]
+                                    title=f"{name} Flutter Developer", posted_date=datetime.now(timezone.utc))]
         Only.name = name
         return Only
 
@@ -464,6 +627,7 @@ def test_per_site_import_fetches_only_that_site(client, monkeypatch):
     finally:
         db.close()
 
+    _owner_describes_their_trade(client, ["Flutter Developer"])
     r = client.post("/api/jobs/refresh", json=["sitea"])
     assert r.status_code == 200
     assert fetched == ["sitea"]
@@ -548,6 +712,48 @@ def test_refresh_without_a_site_name_uses_the_ticked_ones(client, monkeypatch):
     r = client.post("/api/jobs/refresh", json=[])
     assert r.status_code == 200
     assert r.json()["sources_used"] == ["tickme"]
+
+
+def test_refresh_records_sources_in_import_order_not_saved_order(client, monkeypatch):
+    """The import runs LinkedIn first, then the Egypt index, then the rest; the
+    recorded sources_used must match even when the stored preference predates
+    that order."""
+    from app.services import providers as providers_mod
+    from app.services.providers import clear_fetch_cache
+
+    class SpyA(providers_mod.BaseProvider):
+        name = "spy_a"
+        label = "Spy A"
+
+        def fetch(self, titles, skills, locations, remote_only):
+            clear_fetch_cache()
+            return []
+
+    class SpyB(providers_mod.BaseProvider):
+        name = "spy_b"
+        label = "Spy B"
+
+        def fetch(self, titles, skills, locations, remote_only):
+            clear_fetch_cache()
+            return []
+
+    monkeypatch.setitem(providers_mod.REGISTRY, "spy_a", SpyA)
+    monkeypatch.setitem(providers_mod.REGISTRY, "spy_b", SpyB)
+    # Saved scrambled (old order); the run must still report registry order.
+    client.put("/api/automation/settings", json=dict(
+        enabled=False, titles=["Flutter Developer"], skills=["Flutter"],
+        locations=["Cairo"], remote_only=False, interval_minutes=60,
+        min_match_score=50, sources=["spy_b", "spy_a"], max_age_days=30,
+    ))
+    db = SessionLocal()
+    try:
+        providers_mod.ensure_sources(db)
+    finally:
+        db.close()
+
+    r = client.post("/api/jobs/refresh", json=[])
+    assert r.status_code == 200
+    assert r.json()["sources_used"] == ["spy_a", "spy_b"]
 
 
 def test_himalayas_ignores_the_dates_its_feed_invents(monkeypatch):
@@ -652,3 +858,579 @@ def test_working_nomads_handles_a_non_list_response(monkeypatch):
     monkeypatch.setattr(providers_mod.httpx, "get", lambda *a, **k: FakeResp())
     assert WorkingNomadsProvider().fetch([], [], [], False) == []
     clear_fetch_cache()
+
+
+def test_a_manual_import_re_reads_the_feed_a_scheduled_one_does_not(monkeypatch):
+    """He asked for a hunter: pressing Import must see what was posted minutes ago.
+
+    The cache window exists to keep free APIs off the back of a reload-happy browser,
+    not to answer an explicit Import with a stale copy. A site with a monthly request
+    allowance is the exception — spending it twice in a minute only blinds the month.
+    """
+    from app.services import providers as mod
+    from app.services.providers import clear_fetch_cache, run_discovery
+
+    clear_fetch_cache()
+    hits: list[str] = []
+
+    class Counting(mod.BaseProvider):
+        name = "openfeed"
+        label = "Open feed"
+        fetch_ttl = 3600
+
+        def fetch(self, titles, skills, locations, remote_only):
+            mod._cached_get_json("openfeed:one", "http://example.invalid/feed")
+            return []
+
+    class Capped(Counting):
+        name = "cappedfeed"
+        label = "Capped feed"
+        keep_cache_window = True
+
+        def fetch(self, titles, skills, locations, remote_only):
+            mod._cached_get_json("cappedfeed:one", "http://example.invalid/feed")
+            return []
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"jobs": []}
+
+    def fake_get(url, *args, **kwargs):
+        hits.append(url)
+        return Resp()
+
+    monkeypatch.setitem(mod.REGISTRY, "openfeed", Counting)
+    monkeypatch.setitem(mod.REGISTRY, "cappedfeed", Capped)
+    monkeypatch.setattr(mod.httpx, "get", fake_get)
+
+    db = SessionLocal()
+    try:
+        mod.ensure_sources(db)
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        for _ in range(2):
+            run_discovery(db, ["Flutter Developer"], [], [], False, ["openfeed", "cappedfeed"])
+        assert hits.count("http://example.invalid/feed") == 2  # one read each, second from cache
+
+        for _ in range(2):
+            run_discovery(db, ["Flutter Developer"], [], [], False, ["openfeed", "cappedfeed"], fresh=True)
+        assert hits.count("http://example.invalid/feed") == 4  # the open site re-read twice
+        # The capped site still answered once: its window held through both manual runs.
+        run_discovery(db, ["Flutter Developer"], [], [], False, ["openfeed", "cappedfeed"])
+        assert hits.count("http://example.invalid/feed") == 4  # a manual read refreshes the window
+    finally:
+        db.close()
+    clear_fetch_cache()
+
+
+def test_discovery_reports_real_per_site_progress(monkeypatch):
+    """The import UI shows 'site x of N', so the callback must fire once per site, in order."""
+    from app.services import providers as providers_mod
+    from app.services.providers import clear_fetch_cache, run_discovery
+    clear_fetch_cache()
+
+    class SpyProvider(providers_mod.BaseProvider):
+        name = "prog_one"
+        label = "Progress One"
+
+        def fetch(self, titles, skills, locations, remote_only):
+            return []
+
+    class SpyProviderTwo(SpyProvider):
+        name = "prog_two"
+        label = "Progress Two"
+
+    monkeypatch.setitem(providers_mod.REGISTRY, "prog_one", SpyProvider)
+    monkeypatch.setitem(providers_mod.REGISTRY, "prog_two", SpyProviderTwo)
+    db = SessionLocal()
+    try:
+        providers_mod.ensure_sources(db)
+    finally:
+        db.close()
+
+    events: list[tuple] = []
+    db = SessionLocal()
+    try:
+        run_discovery(
+            db, ["Flutter Developer"], [], [], False, ["prog_one", "prog_two"],
+            on_progress=lambda done, total, name, label, line: events.append((done, total, name, label, line)),
+        )
+    finally:
+        db.close()
+    assert [(e[0], e[1], e[2]) for e in events] == [(1, 2, "prog_one"), (2, 2, "prog_two")]
+    assert all("fetched 0" in e[4] for e in events)
+
+
+def test_a_site_that_could_not_be_read_says_so(client, monkeypatch):
+    """A board that never answered must not be reported as a board with nothing posted."""
+    from app.services import providers as mod
+    from app.services.providers import clear_fetch_cache, run_discovery
+
+    clear_fetch_cache()
+
+    class Silent(mod.BaseProvider):
+        name = "silentfeed"
+        label = "Silent feed"
+
+        def fetch(self, titles, skills, locations, remote_only):
+            mod._cached_get_json("silentfeed:one", "http://example.invalid/feed")
+            return []
+
+    def boom(url, *args, **kwargs):
+        raise ConnectionError("no route to host")
+
+    monkeypatch.setitem(mod.REGISTRY, "silentfeed", Silent)
+    monkeypatch.setattr(mod.httpx, "get", boom)
+    db = SessionLocal()
+    try:
+        mod.ensure_sources(db)
+        _, lines = run_discovery(db, ["Flutter Developer"], [], [], False, ["silentfeed"])
+    finally:
+        db.close()
+    assert any("Silent feed: could not be read" in line and "ConnectionError" in line for line in lines)
+    assert not any(line.startswith("Silent feed: fetched 0") for line in lines)
+
+
+def test_a_site_that_only_partly_answered_reports_the_pages_it_lost(client, monkeypatch):
+    """The jobs it did send are still real, but the run says the rest went unread."""
+    from app.services import providers as mod
+    from app.services.providers import clear_fetch_cache, run_discovery
+
+    clear_fetch_cache()
+
+    class Half(mod.BaseProvider):
+        name = "halffeed"
+        label = "Half feed"
+
+        def fetch(self, titles, skills, locations, remote_only):
+            mod._cached_get_json("halffeed:one", "http://example.invalid/one")
+            return [ProviderJob(source="halffeed", external_id="half-1",
+                                title="Junior Flutter Developer",
+                                posted_date=datetime.now(timezone.utc))]
+
+    def once_then_boom(url, *args, **kwargs):
+        if str(url).endswith("/one"):
+            raise ConnectionError("no route to host")
+
+        class Resp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"jobs": []}
+
+        return Resp()
+
+    monkeypatch.setitem(mod.REGISTRY, "halffeed", Half)
+    monkeypatch.setattr(mod.httpx, "get", once_then_boom)
+    db = SessionLocal()
+    try:
+        mod.ensure_sources(db)
+        _, lines = run_discovery(db, ["Flutter Developer"], [], [], False, ["halffeed"])
+    finally:
+        db.close()
+    assert any(line.startswith("Half feed: fetched 1") and "partly read" in line for line in lines)
+
+
+LI_CARDS_SAMPLE = """<li>
+  <div class="base-card base-search-card job-search-card" data-entity-urn="urn:li:jobPosting:4470811064">
+    <a class="base-card__full-link absolute" href="https://eg.linkedin.com/jobs/view/junior-mobile-developer-at-blnk-4470811064?position=1&amp;pageNum=0&amp;trackingId=abc">
+      <span class="sr-only">Junior Mobile Developer</span>
+    </a>
+    <div class="base-search-card__info">
+      <h3 class="base-search-card__title"> Junior Mobile Developer </h3>
+      <h4 class="base-search-card__subtitle"><a class="hidden-nested-link" href="https://eg.linkedin.com/company/blnk"> blnk </a></h4>
+      <div class="base-search-card__metadata">
+        <span class="job-search-card__location"> Giza, Al Jizah, Egypt </span>
+        <time class="job-search-card__listdate" datetime="2026-09-27"> 1 week ago </time>
+      </div>
+    </div>
+  </div>
+</li>
+<li>
+  <div class="base-card base-search-card job-search-card" data-entity-urn="urn:li:jobPosting:4470999001">
+    <a class="base-card__full-link absolute" href="https://www.linkedin.com/jobs/view/remote-flutter-engineer-at-xyz-4470999001?position=2">
+      <span class="sr-only">Remote Flutter Engineer</span>
+    </a>
+    <div class="base-search-card__info">
+      <h3 class="base-search-card__title"> Remote Flutter Engineer </h3>
+      <h4 class="base-search-card__subtitle"><a href="https://www.linkedin.com/company/xyz"> XYZ </a></h4>
+      <div class="base-search-card__metadata">
+        <span class="job-search-card__location"> Remote </span>
+        <time class="job-search-card__listdate" datetime="2026-10-05"> 2 days ago </time>
+      </div>
+    </div>
+  </div>
+</li>"""
+
+
+def test_linkedin_parses_guest_cards_with_clean_urls_and_dates(monkeypatch):
+    from app.services.providers import LinkedInProvider, clear_fetch_cache
+    clear_fetch_cache()
+
+    class FakeResp:
+        text = LI_CARDS_SAMPLE
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {}
+
+    import app.services.providers as providers_mod
+    monkeypatch.setattr(providers_mod.httpx, "get", lambda *a, **k: FakeResp())
+    jobs = LinkedInProvider().fetch(["Flutter"], [], ["Egypt"], False)
+    assert len(jobs) == 2
+    first = jobs[0]
+    assert first.source == "linkedin"
+    assert first.external_id == "4470811064"
+    assert first.title == "Junior Mobile Developer"
+    assert first.company == "blnk"
+    assert "Egypt" in first.location
+    assert first.country == "Egypt"
+    assert not first.remote
+    # The tracking query is stripped so the same posting dedups across runs.
+    assert first.url == "https://eg.linkedin.com/jobs/view/junior-mobile-developer-at-blnk-4470811064"
+    assert first.posted_date is not None and first.posted_date.year == 2026
+    second = jobs[1]
+    assert second.remote and second.country == "Remote"
+
+
+def test_linkedin_dedupes_repeated_postings_across_pages(monkeypatch):
+    from app.services.providers import LinkedInProvider, clear_fetch_cache
+    clear_fetch_cache()
+
+    class FakeResp:
+        text = LI_CARDS_SAMPLE
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {}
+
+    import app.services.providers as providers_mod
+    # Same two cards returned on every page: the seen-set must keep them unique.
+    monkeypatch.setattr(providers_mod.httpx, "get", lambda *a, **k: FakeResp())
+    jobs = LinkedInProvider().fetch([], [], [], False)
+    ids = [j.external_id for j in jobs]
+    assert ids == ["4470811064", "4470999001"]
+
+
+def test_linkedin_handles_api_failure(monkeypatch):
+    from app.services.providers import LinkedInProvider, clear_fetch_cache
+    clear_fetch_cache()
+
+    def boom(*args, **kwargs):
+        raise ConnectionError("no internet")
+
+    import app.services.providers as providers_mod
+    monkeypatch.setattr(providers_mod.httpx, "get", boom)
+    assert LinkedInProvider().fetch([], [], [], False) == []
+
+
+JSEARCH_V2_SAMPLE = {
+    "status": "OK",
+    "data": {
+        "jobs": [
+            {
+                "job_id": "abc123",
+                "job_title": "Junior Flutter Developer",
+                "employer_name": "Nile Apps",
+                "job_publisher": "Wuzzuf",
+                "job_location": "القاهرة",
+                "job_country": "EG",
+                "job_is_remote": False,
+                "job_employment_types": "['FULLTIME']",
+                "job_description": "Build Flutter apps for a growing Cairo team.",
+                "job_apply_link": "https://wuzzuf.net/jobs/p/abc123",
+                "job_min_salary": 30000,
+                "job_max_salary": 55000,
+                "job_salary_currency": "EGP",
+                "job_posted_at_datetime_utc": "2026-10-04T10:00:00",
+            },
+            {
+                "job_id": "def456",
+                "job_title": "Remote Mobile Engineer",
+                "employer_name": "",
+                "job_publisher": "RemoteOK",
+                "job_location": "Remote",
+                "job_is_remote": True,
+                "job_employment_type": "FULLTIME",
+                "job_description": "Dart and Flutter, fully remote.",
+                "job_apply_link": "https://remoteok.com/def456",
+            },
+        ],
+        "cursor": None,
+    },
+}
+
+
+def test_jsearch_skips_without_key(monkeypatch):
+    from app.services.providers import JSearchProvider, clear_fetch_cache
+    import app.config as config_mod
+    clear_fetch_cache()
+    monkeypatch.setattr(config_mod, "RAPIDAPI_KEY", "", raising=False)
+    assert JSearchProvider().fetch(["Flutter"], [], [], False) == []
+
+
+def test_jsearch_parses_v2_nested_payload(monkeypatch):
+    from app.services.providers import JSearchProvider, clear_fetch_cache
+    import app.config as config_mod
+    clear_fetch_cache()
+    monkeypatch.setattr(config_mod, "RAPIDAPI_KEY", "test-key", raising=False)
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return JSEARCH_V2_SAMPLE
+
+    import app.services.providers as providers_mod
+    seen = {}
+
+    def fake_get(url, params=None, headers=None, **k):
+        seen["url"] = url
+        seen["headers"] = headers
+        return FakeResp()
+
+    monkeypatch.setattr(providers_mod.httpx, "get", fake_get)
+    jobs = JSearchProvider().fetch(["Flutter"], [], [], False)
+    assert seen["headers"]["x-rapidapi-key"] == "test-key"
+    assert seen["headers"]["x-rapidapi-host"] == "jsearch.p.rapidapi.com"
+    assert len(jobs) == 2
+    first = jobs[0]
+    assert first.source == "jsearch"
+    assert first.external_id == "abc123"
+    assert first.title == "Junior Flutter Developer"
+    assert first.company == "Nile Apps"
+    assert first.employment_type == "Full-Time"
+    assert first.salary_min == 30000 and first.salary_currency == "EGP"
+    assert first.posted_date is not None and first.posted_date.year == 2026
+    # The publisher is kept in the description so the user can see where it came from.
+    assert "Wuzzuf" in first.description
+    second = jobs[1]
+    assert second.remote and second.company == "RemoteOK"  # falls back to publisher
+
+
+def test_jsearch_handles_api_failure(monkeypatch):
+    from app.services.providers import JSearchProvider, clear_fetch_cache
+    import app.config as config_mod
+    clear_fetch_cache()
+    monkeypatch.setattr(config_mod, "RAPIDAPI_KEY", "test-key", raising=False)
+
+    def boom(*args, **kwargs):
+        raise ConnectionError("no internet")
+
+    import app.services.providers as providers_mod
+    monkeypatch.setattr(providers_mod.httpx, "get", boom)
+    assert JSearchProvider().fetch([], [], [], False) == []
+
+
+# --- search terms: what an import actually asks the keyword sites ---
+
+
+def test_search_terms_keeps_order_dedupes_and_caps():
+    from app.services.providers import FALLBACK_TERM, MAX_SEARCH_TERMS, search_terms
+
+    assert search_terms(["Flutter Developer", "flutter developer", "Python"], ["Flutter"]) == [
+        "Flutter Developer", "Python", "Flutter",
+    ]
+    assert len(search_terms([f"term {i}" for i in range(9)])) == MAX_SEARCH_TERMS
+    assert search_terms([], []) == [FALLBACK_TERM]
+
+
+def test_remotive_asks_each_term_as_its_own_request(monkeypatch):
+    from app.services.providers import RemotiveProvider, clear_fetch_cache
+    clear_fetch_cache()
+    asked: list[str] = []
+
+    class FakeResp:
+        def __init__(self, search):
+            self.search = search
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            other = 200 if self.search.startswith("Flutter") else 300
+            return {"jobs": [
+                {"id": 1, "title": "On every search", "company_name": "ACME", "url": "http://x/1"},
+                {"id": other, "title": f"{self.search} role", "company_name": "CO",
+                 "url": f"http://x/{other}"},
+            ]}
+
+    def fake_get(url, params=None, **kw):
+        asked.append(params["search"])
+        return FakeResp(params["search"])
+
+    import app.services.providers as providers_mod
+    monkeypatch.setattr(providers_mod.httpx, "get", fake_get)
+    jobs = RemotiveProvider().fetch(["Flutter Developer", "Python Developer"], [], [], False)
+
+    assert asked == ["Flutter Developer", "Python Developer"]
+    assert len({j.external_id for j in jobs}) == len(jobs) == 3
+
+
+def test_linkedin_loops_terms_and_merges_without_duplicates(monkeypatch):
+    from app.services.providers import LinkedInProvider, clear_fetch_cache
+    clear_fetch_cache()
+    asked: list[tuple] = []
+
+    class FakeResp:
+        def __init__(self, keywords):
+            self.keywords = keywords
+
+        def raise_for_status(self):
+            pass
+
+        @property
+        def text(self):
+            return LI_CARDS_SAMPLE if self.keywords == "Flutter Developer" else ""
+
+    def fake_get(url, params=None, **kw):
+        asked.append((params["keywords"], params["start"]))
+        return FakeResp(params["keywords"])
+
+    import app.services.providers as providers_mod
+    monkeypatch.setattr(providers_mod.httpx, "get", fake_get)
+    jobs = LinkedInProvider().fetch(["Flutter Developer", "Python Developer"], [], ["Egypt"], False)
+
+    assert [k for k, _ in asked] == ["Flutter Developer", "Flutter Developer", "Python Developer"]
+    assert [s for _, s in asked][:2] == ["0", "25"]
+    assert len(jobs) == 2
+
+
+def test_jsearch_spends_one_request_per_import_and_rotates_the_term(monkeypatch):
+    from app.services.providers import JSearchProvider, clear_fetch_cache
+    clear_fetch_cache()
+    asked: list[str] = []
+
+    class FakeResp:
+        def __init__(self, query):
+            self.query = query
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return JSEARCH_V2_SAMPLE
+
+    def fake_get(url, params=None, **kw):
+        asked.append(params["query"])
+        return FakeResp(params["query"])
+
+    import app.services.providers as providers_mod
+    monkeypatch.setattr(providers_mod, "_jsearch_turn", 0)
+    monkeypatch.setattr(providers_mod.config, "RAPIDAPI_KEY", "test-key", raising=False)
+    monkeypatch.setattr(providers_mod.httpx, "get", fake_get)
+
+    titles = ["Flutter Developer", "Python Developer"]
+    JSearchProvider().fetch(titles, [], ["Egypt"], False)
+    JSearchProvider().fetch(titles, [], ["Egypt"], False)
+
+    assert asked == ["Flutter Developer jobs in Egypt", "Python Developer jobs in Egypt"]
+
+
+def test_effective_terms_falls_back_to_the_profile_when_settings_are_blank():
+    from app.database import SessionLocal
+    from app.models import SearchPreference, Skill, UserProfile
+    from app.services.providers import effective_terms
+
+    db = SessionLocal()
+    try:
+        prof = db.query(UserProfile).first()
+        prof.desired_titles = ["Flutter Developer"]
+        prof.preferred_locations = ["Cairo"]
+        db.add(Skill(profile_id=prof.id, name="Dart", level=4))
+        pref = SearchPreference(id=1)
+        db.add(pref)
+        db.commit()
+
+        titles, skills, locations = effective_terms(db, pref)
+        assert titles == ["Flutter Developer"]
+        assert skills == ["Dart"]
+        # The country leads so a city in the profile cannot narrow the whole search.
+        assert locations == ["Egypt", "Cairo"]
+
+        pref.locations = ["Dubai"]
+        db.commit()
+        _, _, locations = effective_terms(db, pref)
+        assert locations == ["Dubai"]
+
+        pref.extra_terms = ["Game Developer"]
+        db.commit()
+        titles, _, _ = effective_terms(db, pref)
+        assert titles == ["Flutter Developer", "Game Developer"]
+    finally:
+        db.close()
+
+
+def test_search_plan_endpoint_shows_the_phrase_each_site_will_be_asked(client):
+    r = client.post("/api/automation/search-plan", json={
+        "titles": ["Flutter Developer"],
+        "skills": ["Python"],
+        "extra_terms": ["Game Developer"],
+        "locations": ["Cairo"],
+    })
+    assert r.status_code == 200
+    plan = r.json()
+
+    assert plan["terms"] == ["Flutter Developer", "Game Developer", "Python"]
+    assert plan["where"] == "Cairo"
+
+    sites = {s["name"]: s for s in plan["sites"]}
+    assert sites["linkedin"]["asks"] == [
+        "Flutter Developer in Cairo", "Game Developer in Cairo", "Python in Cairo",
+    ]
+    assert sites["remotive"]["mode"] == "keyword"
+    assert sites["arbeitnow"]["mode"] == "feed"
+    assert sites["arbeitnow"]["asks"] == []
+    assert sites["jsearch"]["needs_key"] is True
+    assert sites["jsearch"]["asks"] == [
+        "Flutter Developer jobs in Cairo", "Game Developer jobs in Cairo", "Python jobs in Cairo",
+    ]
+    assert "quota" in sites["jsearch"]["note"]
+    assert sites["arbeitnow"]["note"]
+
+
+def test_search_plan_marks_terms_that_have_to_wait(client):
+    extra = ["React Developer", "Flutter Developer", "Python Developer", "QA Engineer",
+             "Data Analyst", "DevOps Engineer", "Product Manager", "UI Designer"]
+    r = client.post("/api/automation/search-plan", json={"titles": extra, "extra_terms": []})
+    plan = r.json()
+    assert len(plan["terms"]) == 5
+    assert plan["terms_waiting"] == extra[5:]
+
+
+def test_salary_sort_never_compares_one_currency_against_another(client):
+    """"Highest salary" used to rank EGP 30,000 above USD 3,000 as if they were one money."""
+    from app.database import SessionLocal
+    from app.models import Job
+
+    db = SessionLocal()
+    try:
+        jobs = db.query(Job).order_by(Job.id).all()
+        for job, amount, currency in (
+            (jobs[0], 30000, "EGP"), (jobs[1], 3000, "USD"), (jobs[2], 9000, "USD"),
+            (jobs[3], None, "ZAR"), (jobs[4], 1500, None),
+        ):
+            job.salary_min = job.salary_max = amount
+            job.salary_currency = currency
+        db.commit()
+    finally:
+        db.close()
+
+    items = client.get("/api/jobs?sort=salary&page_size=100").json()["items"]
+    priced = [i for i in items if i["salary_min"]]
+    amounts = [(i["salary_min"], (i["salary_currency"] or "").upper()) for i in priced]
+    assert amounts[:4] == [(30000, "EGP"), (9000, "USD"), (3000, "USD"), (1500, "")]
+    # A posting that publishes no amount never leads the list.
+    assert not any(i["salary_min"] is None for i in items[: len(priced)])

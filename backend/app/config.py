@@ -35,9 +35,34 @@ DATABASE_URL = _env(
 OPENAI_API_KEY = _env("OPENAI_API_KEY")
 OPENAI_MODEL = _env("OPENAI_MODEL", "gpt-4o-mini")
 
+# Free alternative provider: Google Gemini. A free API key from Google AI Studio
+# (https://aistudio.google.com) makes the AI-written materials work at no cost.
+GEMINI_API_KEY = _env("GEMINI_API_KEY")
+GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-3.8-flash")
+
+# Second free fallback: Groq (https://console.groq.com/keys). OpenAI-compatible
+# API, used when Gemini's free daily quota is exhausted.
+GROQ_API_KEY = _env("GROQ_API_KEY")
+GROQ_MODEL = _env("GROQ_MODEL", "qwen/qwen3.8-27b")
+
+# Optional: unlocks the "Wuzzuf via Google for Jobs" (JSearch) source.
+RAPIDAPI_KEY = _env("RAPIDAPI_KEY")
+
+# Optional: unlocks Jooble, a large Egypt aggregator. Free key from
+# https://jooble.org/api/about — silent until configured.
+JOOBLE_API_KEY = _env("JOOBLE_API_KEY")
+
+# Optional: unlocks Adzuna, an aggregator of Egyptian job boards. Free key pair
+# from https://developer.adzuna.com — silent until both are configured.
+ADZUNA_APP_ID = _env("ADZUNA_APP_ID")
+ADZUNA_APP_KEY = _env("ADZUNA_APP_KEY")
+
 CORS_ORIGINS = [
     o for o in _env("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o
 ]
+
+SESSION_COOKIE_SECURE = _env("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
+SESSION_MAX_AGE_SECONDS = int(_env("SESSION_MAX_AGE_SECONDS", "604800"))
 
 HOST = _env("HOST", "127.0.0.1")
 PORT = int(_env("PORT", "8000"))

@@ -1,4 +1,4 @@
-import { APP_STATUSES, type Job, sourceLabel } from "@/lib/types";
+import { APP_STATUSES, type Job, boardLabel, sourceLabel } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 
 const STATUS_STYLES: Record<string, { variant: "default" | "secondary" | "success" | "warning" | "danger" | "outline"; label: string }> = {
@@ -43,5 +43,8 @@ export function JobTags({ job, limit = 5 }: { job: Job; limit?: number }) {
 }
 
 export function SourceBadge({ job }: { job: Job }) {
-  return <Badge variant="secondary" className="shrink-0">{sourceLabel(job.source)}</Badge>;
+  const board = boardLabel(job);
+  const source = sourceLabel(job.source);
+  const via = board !== source ? `Imported from ${source}` : undefined;
+  return <Badge variant="secondary" className="shrink-0" title={via}>{board}</Badge>;
 }

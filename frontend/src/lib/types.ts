@@ -3,6 +3,8 @@ export interface Skill {
   name: string;
   level: number;
   years?: number | null;
+  // Client-only row identity for stable React keys; ignored by the backend.
+  _key?: number;
 }
 
 export interface Experience {
@@ -14,6 +16,8 @@ export interface Experience {
   end_date: string | null;
   current: boolean;
   description: string;
+  // Client-only row identity for stable React keys; ignored by the backend.
+  _key?: number;
 }
 
 export interface EducationItem {
@@ -24,6 +28,8 @@ export interface EducationItem {
   start_date: string | null;
   end_date: string | null;
   description: string;
+  // Client-only row identity for stable React keys; ignored by the backend.
+  _key?: number;
 }
 
 export interface Project {
@@ -32,6 +38,8 @@ export interface Project {
   description: string;
   url: string;
   technologies: string[];
+  // Client-only row identity for stable React keys; ignored by the backend.
+  _key?: number;
 }
 
 export interface Profile {
@@ -62,6 +70,15 @@ export interface Profile {
   projects: Project[];
 }
 
+/** GET/POST /api/profile/resume/autofill — suggestions only, nothing saved yet. */
+export interface ResumeAutofill {
+  fields: Record<string, string>;
+  skills: string[];
+  experiences: Experience[];
+  education: EducationItem[];
+  resume_chars: number;
+}
+
 export interface Job {
   id: number;
   external_id: string;
@@ -83,6 +100,17 @@ export interface Job {
   expiry_date: string | null;
   first_seen: string;
   last_seen: string;
+  /** "posted" | "listed" | "unknown" — how much the date above can be trusted. */
+  date_kind: string;
+  /** The board that actually published the ad (Wuzzuf, LinkedIn, Bayt…) when the
+   *  source is only an index; "" when the source is the board itself. */
+  publisher: string;
+  /** How this ad wants to be applied to, read from its own text. */
+  apply_emails: string[];
+  apply_links: string[];
+  /** "email" | "company-link" | "listing" | "unknown" */
+  apply_channel: string;
+  apply_note: string;
   is_demo: boolean;
   is_active: boolean;
   saved: boolean;
@@ -95,7 +123,11 @@ export interface JobSourceSite {
   label: string;
   enabled: boolean;
   requires_key: boolean;
+  /** False when the site needs a key that .env does not hold, so it never ran. */
+  key_ready: boolean;
   live_jobs: number;
+  /** When an import last fetched this site, even if it kept nothing. */
+  fetched_at: string | null;
 }
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -106,10 +138,24 @@ export const SOURCE_LABELS: Record<string, string> = {
   weworkremotely: "We Work Remotely",
   himalayas: "Himalayas",
   workingnomads: "Working Nomads",
+  linkedin: "LinkedIn",
+  jsearch: "Google Jobs Egypt",
+  amazon: "Amazon Careers",
+  workday: "Workday (Citi, PwC, Unilever…)",
+  smartrecruiters: "SmartRecruiters (Delivery Hero…)",
+  jooble: "Jooble Egypt",
+  adzuna: "Adzuna Egypt",
+  employers: "Employer boards (Canonical, Stripe…)",
+  jobgether: "Jobgether",
 };
 
 export function sourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source;
+}
+
+/** Where clicking Apply really lands: the publisher board, else the source itself. */
+export function boardLabel(job: Pick<Job, "publisher" | "source">): string {
+  return job.publisher || sourceLabel(job.source);
 }
 
 export interface JobPage {
@@ -118,6 +164,14 @@ export interface JobPage {
   page: number;
   page_size: number;
   pages: number;
+}
+
+/** Enough of a job to fill a dropdown — no description, dates or skills. */
+export interface JobLite {
+  id: number;
+  title: string;
+  company: string;
+  location: string;
 }
 
 export interface SavedJob {
@@ -138,6 +192,8 @@ export interface Application {
   notes: string;
   updated_at: string;
   job: Job;
+  /** How many documents the AI desk already prepared for this application. */
+  materials_count: number;
 }
 
 export interface MatchFactor {
@@ -156,6 +212,7 @@ export interface MatchResult {
   factors: MatchFactor[];
   why_match: string;
   concerns: string;
+  hard_gap: string;
   next_steps: string[];
   ai_enhanced: boolean;
   job?: {
@@ -171,7 +228,10 @@ export interface MatchResult {
     salary_max: number | null;
     salary_currency: string | null;
     is_demo: boolean;
+    url: string;
     posted_date?: string | null;
+    first_seen?: string | null;
+    date_kind?: string;
   };
 }
 
@@ -186,6 +246,24 @@ export interface GenerationResult {
   content: string;
   template_based: boolean;
   warning: string;
+}
+
+export interface PreparedMaterial {
+  id: number;
+  kind: string;
+  content: string;
+  template_based: boolean;
+  created_at: string;
+}
+
+/** What POST /api/applications/prepare returns: the tracker row, its documents, the route. */
+export interface PreparedApplication {
+  application: Application;
+  materials: PreparedMaterial[];
+  apply_emails: string[];
+  apply_links: string[];
+  apply_channel: string;
+  apply_note: string;
 }
 
 export interface StatusCount {
@@ -221,6 +299,7 @@ export interface SearchPrefs {
   enabled: boolean;
   titles: string[];
   skills: string[];
+  extra_terms: string[];
   locations: string[];
   remote_only: boolean;
   interval_minutes: number;
@@ -228,6 +307,34 @@ export interface SearchPrefs {
   max_age_days: number;
   sources: string[];
   scheduler_running: boolean;
+}
+
+export interface SearchPlanSite {
+  name: string;
+  label: string;
+  mode: "keyword" | "feed";
+  asks: string[];
+  note: string;
+  needs_key: boolean;
+  key_present: boolean;
+}
+
+export interface SearchPlan {
+  terms: string[];
+  terms_waiting: string[];
+  titles: string[];
+  skills: string[];
+  locations: string[];
+  where: string;
+  sites: SearchPlanSite[];
+  /** Terms the app read differently because of a typo; the search uses the corrected form. */
+  corrections: { typed: string; corrected: string }[];
+}
+
+export interface TermSuggestion {
+  term: string;
+  suggestion: string;
+  kind: "title" | "skill" | "location";
 }
 
 export interface AutomationRun {
@@ -254,6 +361,7 @@ export const APP_STATUSES = [
 ] as const;
 
 export const GENERATION_KINDS = [
+  { value: "cv", label: "Tailored CV" },
   { value: "summary", label: "Resume Summary" },
   { value: "bullets", label: "Resume Bullets" },
   { value: "cover_letter", label: "Cover Letter" },
@@ -261,3 +369,14 @@ export const GENERATION_KINDS = [
   { value: "questions", label: "Interview Questions" },
   { value: "keywords", label: "Keywords" },
 ] as const;
+
+/** Labels for the documents one click prepares in the tracker. */
+export const MATERIAL_LABELS: Record<string, string> = {
+  cv: "Tailored CV",
+  cover_letter: "Cover letter",
+  email: "Application email",
+  questions: "Interview questions",
+  keywords: "Keywords from the ad",
+  summary: "Resume summary",
+  bullets: "Resume bullets",
+};

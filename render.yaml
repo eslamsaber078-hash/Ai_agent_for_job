@@ -1,0 +1,40 @@
+# Render blueprint: one web service runs backend + built frontend on the same
+# domain. Deploy via Dashboard → New → Blueprint (or sync this repo) and fill
+# the env values marked sync:false in the service settings afterwards.
+
+services:
+  - type: web
+    name: ai-job-hunter
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: |
+      pip install -r requirements.txt
+      npm install --prefix ../frontend
+      npm run build --prefix ../frontend
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      # Paste the Postgres connection string from Neon (Free, no card). Do NOT
+      # keep the local sqlite default: Render's disk is wiped on every deploy.
+      - key: DATABASE_URL
+        sync: false
+      # Public HTTPS site: the session cookie must only travel over HTTPS.
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: JOOBLE_API_KEY
+        sync: false
+      - key: ADZUNA_APP_ID
+        sync: false
+      - key: ADZUNA_APP_KEY
+        sync: false

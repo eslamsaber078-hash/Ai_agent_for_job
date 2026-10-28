@@ -40,7 +40,7 @@ DEFAULT_JOB_MAX_AGE_DAYS = 30
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     full_name: Mapped[str] = mapped_column(String(200), default="")
     email: Mapped[str] = mapped_column(String(200), default="")
     phone: Mapped[str] = mapped_column(String(50), default="")
@@ -124,13 +124,19 @@ class Project(Base):
     profile: Mapped["UserProfile"] = relationship(back_populates="projects")
 
 
+# Feeds whose timestamp is the crawl, not the company: their newest page always reads
+# "today", so the date they send says when the board listed the ad.
+LISTING_STAMP_SOURCES = {"arbeitnow"}
+
+
 class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
-        UniqueConstraint("source", "external_id", name="uq_job_source_external"),
+        UniqueConstraint("profile_id", "source", "external_id", name="uq_job_profile_source_external"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id"), default=1, index=True)
     external_id: Mapped[str] = mapped_column(String(300))
     source: Mapped[str] = mapped_column(String(100), default="")
     title: Mapped[str] = mapped_column(String(300))
@@ -152,6 +158,19 @@ class Job(Base):
     last_seen: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow, onupdate=utcnow)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    @property
+    def date_kind(self) -> str:
+        """Which of three truths `posted_date` is, so the UI can name it correctly.
+
+        "posted"  — the board states when the company published the ad.
+        "listed"  — the stamp is when the board indexed it; Arbeitnow re-stamps every
+                    page on each crawl, so such a date can never be older than today.
+        "unknown" — the feed sends no date at all and `first_seen` is all we have.
+        """
+        if self.posted_date is None:
+            return "unknown"
+        return "listed" if (self.source or "").lower() in LISTING_STAMP_SOURCES else "posted"
 
 
 class JobSource(Base):
@@ -209,10 +228,12 @@ class GeneratedMaterial(Base):
 class SearchPreference(Base):
     __tablename__ = "search_preferences"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id"), primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     titles: Mapped[list] = mapped_column(JSON, default=list)
     skills: Mapped[list] = mapped_column(JSON, default=list)
+    # Extra fields he adds himself to widen the hunt beyond his profile.
+    extra_terms: Mapped[list] = mapped_column(JSON, default=list)
     locations: Mapped[list] = mapped_column(JSON, default=list)
     remote_only: Mapped[bool] = mapped_column(Boolean, default=False)
     interval_minutes: Mapped[int] = mapped_column(Integer, default=360)
@@ -225,6 +246,7 @@ class AutomationRun(Base):
     __tablename__ = "automation_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id"), default=1, index=True)
     trigger: Mapped[str] = mapped_column(String(20), default="manual")  # manual | scheduled
     status: Mapped[str] = mapped_column(String(20), default="running")  # running | success | failed
     started_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
@@ -233,3 +255,21 @@ class AutomationRun(Base):
     sources_used: Mapped[list] = mapped_column(JSON, default=list)
     error: Mapped[str] = mapped_column(Text, default="")
     log: Mapped[str] = mapped_column(Text, default="")
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    phone: Mapped[str] = mapped_column(String(32), unique=True)
+    password_hash: Mapped[str] = mapped_column(Text)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id"), unique=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime())

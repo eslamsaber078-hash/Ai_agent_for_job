@@ -1,18 +1,33 @@
+import hashlib
 import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.gettempdir(), "jobhunter_test.db").replace("\\", "/")
-os.environ.pop("OPENAI_API_KEY", None)
+# Set to "" (not just unset): config._load_dotenv fills any key missing from the
+# environment with the real backend/.env value, which would make the tests call
+# the real AI provider with his live API key.
+os.environ["OPENAI_API_KEY"] = ""
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["GROQ_API_KEY"] = ""
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.api import auth as auth_api  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Job, UserProfile  # noqa: E402
+from app.models import Account, AuthSession, Job, UserProfile  # noqa: E402
 from app.services import ensure_sources  # noqa: E402
 from fixture_jobs import FIXTURE_JOBS  # noqa: E402
+
+# The fixture owner. Sessions are seeded directly (one scrypt hash computed once)
+# so ordinary API tests do not pay a password verification each time.
+TEST_PHONE = "+201000000001"
+TEST_PHONE_LOCAL = "01000000001"
+TEST_PASSWORD = "test-password-1"
+TEST_PASSWORD_HASH = auth_api._hash_password(TEST_PASSWORD)
+TEST_SESSION_TOKEN = "t" * 43
 
 
 @pytest.fixture(scope="session")
@@ -47,10 +62,28 @@ def reset_db():
                 is_demo=False,
             ))
         db.add(UserProfile(id=1))
+        db.flush()
+        account = Account(phone=TEST_PHONE, password_hash=TEST_PASSWORD_HASH, profile_id=1)
+        db.add(account)
+        db.flush()
+        db.add(AuthSession(
+            token_hash=hashlib.sha256(TEST_SESSION_TOKEN.encode("ascii")).hexdigest(),
+            account_id=account.id,
+            expires_at=now + timedelta(days=1),
+        ))
         db.commit()
     finally:
         db.close()
     yield
+
+
+@pytest.fixture(autouse=True)
+def authenticated(client, reset_db):
+    """Every test talks to the API as the fixture account (owner of profile 1)."""
+    auth_api._THROTTLE_BUCKETS.clear()
+    client.headers["X-Requested-With"] = "XMLHttpRequest"
+    client.cookies.set(auth_api.COOKIE_NAME, TEST_SESSION_TOKEN)
+    yield client
 
 
 @pytest.fixture(autouse=True)
@@ -71,6 +104,10 @@ def no_network(monkeypatch):
     def fake_get(*args, **kwargs):
         return FakeResp()
 
+    def fake_post(*args, **kwargs):
+        return FakeResp()
+
     monkeypatch.setattr(providers_mod.httpx, "get", fake_get)
+    monkeypatch.setattr(providers_mod.httpx, "post", fake_post)
     clear_fetch_cache()
     yield

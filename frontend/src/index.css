@@ -2,50 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Two faces, both served from this app so nothing leaves the machine to load a page:
+   Manrope carries the Latin interface, Readex Pro the Arabic one. A variable file each
+   covers every weight, and `swap` means the words appear at once either way. */
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/manrope-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Readex Pro";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/readex-pro-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF,
+    U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+
+@font-face {
+  font-family: "Readex Pro";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/readex-pro-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 12%;
+    color-scheme: light;
+    --background: 40 33% 98%;
+    --foreground: 224 22% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 12%;
+    --card-foreground: 224 22% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 12%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 12%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 40%;
-    --accent: 0 0% 93%;
-    --accent-foreground: 0 0% 12%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 87%;
-    --input: 0 0% 87%;
-    --ring: 0 0% 9%;
-    --radius: 0.5rem;
+    --popover-foreground: 224 22% 12%;
+    --primary: 224 28% 13%;
+    --primary-foreground: 40 33% 98%;
+    --secondary: 40 18% 94%;
+    --secondary-foreground: 224 20% 16%;
+    --muted: 40 18% 94%;
+    --muted-foreground: 220 10% 42%;
+    --accent: 38 24% 91%;
+    --accent-foreground: 224 22% 12%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 16% 88%;
+    --input: 36 16% 84%;
+    --ring: 224 28% 13%;
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 0 0% 6%;
-    --foreground: 0 0% 96%;
-    --card: 0 0% 9%;
-    --card-foreground: 0 0% 96%;
-    --popover: 0 0% 9%;
-    --popover-foreground: 0 0% 96%;
-    --primary: 0 0% 93%;
-    --primary-foreground: 0 0% 8%;
-    --secondary: 0 0% 17%;
-    --secondary-foreground: 0 0% 96%;
-    --muted: 0 0% 17%;
-    --muted-foreground: 0 0% 64%;
-    --accent: 0 0% 21%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 63% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 20%;
-    --input: 0 0% 22%;
-    --ring: 0 0% 93%;
+    color-scheme: dark;
+    --background: 224 24% 7%;
+    --foreground: 40 20% 96%;
+    --card: 224 20% 10%;
+    --card-foreground: 40 20% 96%;
+    --popover: 224 20% 10%;
+    --popover-foreground: 40 20% 96%;
+    --primary: 40 25% 96%;
+    --primary-foreground: 224 25% 9%;
+    --secondary: 224 15% 16%;
+    --secondary-foreground: 40 20% 96%;
+    --muted: 224 15% 15%;
+    --muted-foreground: 220 11% 64%;
+    --accent: 224 14% 19%;
+    --accent-foreground: 40 20% 98%;
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 224 13% 20%;
+    --input: 224 13% 24%;
+    --ring: 40 25% 90%;
   }
 }
 
@@ -53,25 +89,88 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    /* Latin from Manrope, Arabic from Readex Pro; one flat surface, no coloured glows
+       behind the pages — the cards and their hairlines separate the layers here. */
+    font-family: "Manrope", "Readex Pro", "Segoe UI", Tahoma, system-ui, -apple-system, sans-serif;
+    font-feature-settings: "ss01";
+  }
+
+  [dir="rtl"] {
+    font-family: "Readex Pro", "Segoe UI", Tahoma, system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+    letter-spacing: -0.018em;
+  }
+
+  /* Counts, dates and scores line up in columns instead of jittering as the digits
+     change width. */
+  .nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.16);
+  }
+
+  /* Native controls otherwise render in the operating-system blue. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: hsl(var(--primary));
+  }
+
+  /* Date pickers read better when their native glyph follows the theme. */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+    cursor: pointer;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
   }
 }
 
-/* Native controls otherwise render in the operating-system blue. */
-input[type="checkbox"],
-input[type="radio"] {
-  accent-color: hsl(var(--primary));
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .surface-grid {
+    background-image:
+      linear-gradient(hsl(var(--primary-foreground) / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--primary-foreground) / 0.06) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.26);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.42);
+  background-clip: content-box;
 }

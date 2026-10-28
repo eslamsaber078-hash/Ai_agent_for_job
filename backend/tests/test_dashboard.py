@@ -49,3 +49,14 @@ def test_follow_up_list_starts_with_the_overdue_one(client):
     assert len(dates) == 2
     assert dates == sorted(dates)
     assert dates[0] < now.isoformat()
+
+
+def test_dead_applications_do_not_ask_for_a_follow_up(client):
+    """A Rejected or Archived row has nothing left to follow up on."""
+    from datetime import datetime, timedelta, timezone
+
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    for job_id, status in ((3, "Rejected"), (4, "Archived"), (5, "Applied")):
+        client.post("/api/applications", json=dict(job_id=job_id, status=status, follow_up_date=past))
+    rows = client.get("/api/dashboard/stats").json()["upcoming_follow_ups"]
+    assert [a["status"] for a in rows] == ["Applied"]

@@ -22,11 +22,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     if (!this.state.error) return this.props.children;
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-xl border border-red-500/40 bg-card p-6 text-center shadow-sm">
-          <div className="mx-auto w-fit rounded-full bg-red-500/10 p-3">
-            <AlertTriangle className="h-6 w-6 text-red-500" />
-          </div>
-          <h1 className="mt-4 text-lg font-semibold">This page hit an error</h1>
+        <div className="w-full max-w-md rounded-xl border border-red-500/30 bg-card p-6 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-5 w-5 text-red-500" aria-hidden />
+          <h1 className="mt-4 text-[15px] font-semibold">This page hit an error</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Your saved data is safe. Reload to continue — if it keeps happening, restart the backend too.
           </p>

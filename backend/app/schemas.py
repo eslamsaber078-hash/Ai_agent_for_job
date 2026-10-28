@@ -92,6 +92,23 @@ class ProfileOut(ProfileIn):
     projects: list[ProjectOut] = []
 
 
+class ResumeAutofillOut(BaseModel):
+    """What the CV parser found; nothing here has been saved yet."""
+
+    fields: dict[str, str] = {}
+    skills: list[str] = []
+    experiences: list[ExperienceIn] = []
+    education: list[EducationIn] = []
+    resume_chars: int = 0
+
+
+class ResumeAutofillApply(BaseModel):
+    fields: dict[str, str] = {}
+    skills: list[str] = Field(default_factory=list, max_length=100)
+    experiences: list[ExperienceIn] = Field(default_factory=list, max_length=50)
+    education: list[EducationIn] = Field(default_factory=list, max_length=50)
+
+
 # ---------- Jobs ----------
 
 
@@ -117,10 +134,24 @@ class JobOut(BaseModel):
     expiry_date: datetime | None
     first_seen: datetime
     last_seen: datetime
+    date_kind: str = "posted"
+    publisher: str = ""
+    apply_emails: list[str] = []
+    apply_links: list[str] = []
+    apply_channel: str = "listing"
+    apply_note: str = ""
     is_demo: bool
     is_active: bool = True
     saved: bool = False
     application_status: str | None = None
+
+
+class JobLite(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    company: str
+    location: str
 
 
 class JobPage(BaseModel):
@@ -173,6 +204,7 @@ class ApplicationOut(BaseModel):
     notes: str
     updated_at: datetime
     job: JobOut
+    materials_count: int = 0
 
 
 # ---------- Matching ----------
@@ -195,17 +227,18 @@ class MatchResult(BaseModel):
     why_match: str = ""
     concerns: str = ""
     next_steps: list[str] = []
+    hard_gap: str = ""
     ai_enhanced: bool = False
 
 
 # ---------- Assistant ----------
 
-GENERATION_KINDS = ["summary", "bullets", "cover_letter", "email", "questions", "keywords"]
+GENERATION_KINDS = ["summary", "bullets", "cover_letter", "email", "questions", "keywords", "cv"]
 
 
 class GenerationRequest(BaseModel):
     job_id: int
-    kind: Literal["summary", "bullets", "cover_letter", "email", "questions", "keywords"]
+    kind: Literal["summary", "bullets", "cover_letter", "email", "questions", "keywords", "cv"]
     extra_notes: str = ""
 
 
@@ -214,6 +247,30 @@ class GenerationResult(BaseModel):
     content: str
     template_based: bool = False
     warning: str = ""
+
+
+class PreparedMaterial(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    kind: str
+    content: str
+    template_based: bool
+    created_at: datetime
+
+
+class PrepareIn(BaseModel):
+    job_id: int
+    notes: str = ""
+
+
+class PreparedApplication(BaseModel):
+    """One click of preparation: the tracker row, the documents, and how to apply."""
+    application: "ApplicationOut"
+    materials: list[PreparedMaterial]
+    apply_emails: list[str] = []
+    apply_links: list[str] = []
+    apply_channel: str = "listing"
+    apply_note: str = ""
 
 
 # ---------- Dashboard ----------
@@ -246,6 +303,7 @@ class SearchPreferenceIn(BaseModel):
     enabled: bool = False
     titles: list[str] = []
     skills: list[str] = []
+    extra_terms: list[str] = []
     locations: list[str] = []
     remote_only: bool = False
     interval_minutes: int = Field(default=360, ge=5, le=10080)
@@ -258,6 +316,44 @@ class SearchPreferenceOut(SearchPreferenceIn):
     model_config = ConfigDict(from_attributes=True)
     id: int
     scheduler_running: bool = False
+
+
+class SearchPlanSite(BaseModel):
+    name: str
+    label: str
+    mode: str  # keyword | feed
+    asks: list[str]
+    note: str = ""
+    needs_key: bool
+    key_present: bool
+
+
+class TermCorrection(BaseModel):
+    typed: str
+    corrected: str
+
+
+class SearchPlanOut(BaseModel):
+    terms: list[str]
+    terms_waiting: list[str]
+    titles: list[str]
+    skills: list[str]
+    locations: list[str]
+    where: str
+    sites: list[SearchPlanSite]
+    corrections: list[TermCorrection] = []
+
+
+class TermSuggestIn(BaseModel):
+    titles: list[str] = Field(default_factory=list, max_length=100)
+    skills: list[str] = Field(default_factory=list, max_length=100)
+    locations: list[str] = Field(default_factory=list, max_length=50)
+
+
+class TermSuggestion(BaseModel):
+    term: str
+    suggestion: str
+    kind: str  # title | skill | location
 
 
 class AutomationRunOut(BaseModel):

@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { BookmarkX, Bot, Link2 } from "lucide-react";
+import { BookmarkX, Bot, Link2, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, qs } from "@/lib/api";
 import { type Job, type SavedJob } from "@/lib/types";
 import { formatDate, formatSalary, scoreColor } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/layout/page-header";
 import { JobDetailDialog } from "@/components/jobs/job-detail";
 import { useToast } from "@/context/toast";
+import { cn } from "@/lib/utils";
 
 export function SavedJobsPage() {
   const { toast } = useToast();
@@ -46,24 +48,29 @@ export function SavedJobsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Saved Jobs</h1>
-          <p className="text-sm text-muted-foreground">Jobs you bookmarked for later</p>
-        </div>
-        <Input
-          placeholder="Filter saved jobs…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="w-64"
-        />
-      </div>
+    <div className="animate-fade-in space-y-5">
+      <PageHeader
+        eyebrow="Shortlist"
+        title="Saved Jobs"
+        description="Jobs you bookmarked for later — review them, prep the application, and apply when you are ready."
+        actions={
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Filter saved jobs"
+              placeholder="Filter saved jobs…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        }
+      />
 
       {error && items && (
-        <p className="rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm text-red-600 dark:text-red-400">
+        <p className="rounded-xl border border-red-500/25 bg-red-500/[0.05] p-3 text-sm text-red-700 dark:text-red-400">
           {error} — showing the last results that loaded.{" "}
-          <button className="underline" onClick={load}>Try again</button>
+          <button className="font-semibold underline" onClick={load}>Try again</button>
         </p>
       )}
 
@@ -71,7 +78,7 @@ export function SavedJobsPage() {
         <ErrorState message={error} onRetry={load} />
       ) : items === null ? (
         <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
         </div>
       ) : items.length === 0 ? (
         <EmptyState
@@ -80,19 +87,22 @@ export function SavedJobsPage() {
           description={q ? "Try a different filter." : "Browse Find Jobs and bookmark interesting roles to see them here."}
           action={
             !q ? (
-              <Link to="/jobs"><Button>Find jobs</Button></Link>
+              <Link to="/jobs" className={buttonClassName()}>Find jobs</Link>
             ) : undefined
           }
         />
       ) : (
         <div className="space-y-3">
           {items.map((s) => (
-            <div key={s.id} className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center">
+            <article key={s.id} className="group flex flex-col gap-3 rounded-xl border border-border/80 bg-card p-4 shadow-soft transition-colors duration-200 hover:border-foreground/25 hover:bg-muted/30 sm:flex-row sm:items-center sm:p-5">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   {s.score !== null && (
                     <span
-                      className={`shrink-0 text-2xl font-bold ${scoreColor(s.score)}`}
+                      className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-current/15 bg-muted/50 text-base font-bold tabular-nums",
+                        scoreColor(s.score)
+                      )}
                       title="Estimated match score from your profile — not a guarantee"
                     >
                       {s.score}
@@ -100,32 +110,32 @@ export function SavedJobsPage() {
                   )}
                   <button
                     onClick={() => setSelected(s.job)}
-                    className="text-sm font-semibold hover:text-primary hover:underline"
+                    className="min-w-0 text-left text-[15px] font-semibold leading-snug transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {s.job.title}
+                    <span className="line-clamp-2">{s.job.title}</span>
                   </button>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="mt-1.5 text-xs text-muted-foreground">
                   {s.job.company} · {s.job.location} {s.job.remote ? "· Remote" : ""} · {formatSalary(s.job)}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-[11px] text-muted-foreground">
                   Saved {formatDate(s.saved_at)} {s.notes ? `· ${s.notes}` : ""}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 flex-wrap gap-2">
                 {s.job.url && (
                   <Button size="sm" variant="outline" onClick={() => window.open(s.job.url, "_blank", "noopener")}>
                     <Link2 className="h-4 w-4" /> Apply
                   </Button>
                 )}
-                <Link to={`/assistant?job=${s.job.id}`}>
-                  <Button size="sm" variant="outline"><Bot className="h-4 w-4" /> Assistant</Button>
+                <Link to={`/assistant?job=${s.job.id}`} className={buttonClassName({ size: "sm", variant: "outline" })}>
+                  <Bot className="h-4 w-4" /> Assistant
                 </Link>
-                <Button size="sm" variant="ghost" onClick={() => remove(s.job.id)}>
+                <Button size="sm" variant="ghost" onClick={() => remove(s.job.id)} title="Remove from saved">
                   <BookmarkX className="h-4 w-4" /> Remove
                 </Button>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
