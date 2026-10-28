@@ -37,7 +37,14 @@ def require_csrf(request: Request) -> None:
     if request.headers.get("x-requested-with") != "XMLHttpRequest":
         raise HTTPException(status_code=403, detail="X-Requested-With: XMLHttpRequest is required")
     origin = request.headers.get("origin")
-    if origin is not None and origin not in {value.strip() for value in config.CORS_ORIGINS}:
+    if origin is None:
+        return
+    allowed = {value.strip() for value in config.CORS_ORIGINS}
+    # A page served by this same app is not a cross-site request: accept the
+    # origin matching our own host (production serves frontend + API together).
+    host = request.headers.get("host", "")
+    allowed |= {f"https://{host}", f"http://{host}"}
+    if origin not in allowed:
         raise HTTPException(status_code=403, detail="Request origin is not allowed")
 
 
