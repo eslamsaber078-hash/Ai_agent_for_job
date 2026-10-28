@@ -213,8 +213,8 @@ export const AR: Record<string, string> = {  // topbar
     "— دي السطور اللي المساعد ضافها فوق. راجع أي واحد فيهم مش قادر تثبته قبل ما النسخة النضيفة تطلع — النسخة دي بتطبعهم بالأسود.",
   "Every line without a red mark comes straight from what you entered in":
     "كل سطر من غير علامة حمرا جاي مباشرة من اللي كتبته في",
-  ". Red lines are the assistant's additions for this ad; the clean PDF prints them in black without the marks. Read it, confirm what you can back up, then apply yourself — nothing here is sent for you.":
-    ". السطور الحمرا دي إضافات المساعد للإعلان ده، والـPDF النضيف بيطبعها بالأسود من غير العلامات. اقراه، واتأكد من اللي تقدر تثبته، وبعدها قدّم بنفسك — مفيش حاجة هنا بتتبعت عنك.",
+  ". Red lines are the assistant's additions for this ad; the clean PDF prints them in black without the marks. The CV is rebuilt for ATS parsers — standard headings, plain single-column text — and the readiness score is at the bottom of this review. Read it, confirm what you can back up, then apply yourself — nothing here is sent for you.":
+    ". السطور الحمرا دي إضافات المساعد للإعلان ده، والـPDF النضيف بيطبعها بالأسود من غير العلامات. السيفي بيتبني من جديد لنظام الفحص ATS — عناوين قياسية ونص عادي عمود واحد — وتقرير الجاهزية في آخر المراجعة دي. اقراه، واتأكد من اللي تقدر تثبته، وبعدها قدّم بنفسك — مفيش حاجة هنا بتتبعت عنك.",
   "{count} documents prepared for this ad": "{count} مستند متجهزين للإعلان ده",
   "{count} docs": "{count} مستندات",
   "Write the CV, letter, email, questions and keywords for this ad":

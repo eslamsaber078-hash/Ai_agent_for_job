@@ -82,14 +82,21 @@ def test_cv_leads_with_the_skills_the_ad_names(client):
     content = _cv(client)
     assert "Ahmed Saber" in content
     assert "Junior Flutter Developer" in content
-    owned = content.split("SKILLS THIS AD ASKS FOR, WHICH YOU HAVE\n")[1].split("\n")[0]
+    owned, other = _skills_lines(content)
     assert "Flutter" in owned and "Dart" in owned
     # The ad also wants REST APIs, which his profile cannot back — it must not be claimed
     # as his skill here, only listed in the gap line at the bottom.
     assert "REST" not in owned.upper()
-    assert "MS Office" in content.split("OTHER SKILLS\n")[1].split("\n")[0]
+    assert "MS Office" in other
     gaps = content.split("WHAT THIS AD ASKS FOR THAT YOUR CV DOES NOT SHOW YET")[1]
     assert "rest apis" in gaps.lower()
+
+
+def test_the_reviewed_cv_reports_its_ats_readiness(client):
+    _full_profile(client)
+    content = _cv(client)
+    assert "ATS READINESS CHECK - " in content
+    assert "WHAT THIS AD ASKS FOR" in content  # his checklist stays next to the score
 
 
 def test_cv_puts_the_experience_that_matches_the_ad_first(client):
@@ -97,6 +104,7 @@ def test_cv_puts_the_experience_that_matches_the_ad_first(client):
     content = _cv(client)
     section = content.split("EXPERIENCE")[1].split("EDUCATION")[0]
     assert section.index("Xceed") < section.index("NBE")
+
 
 
 def test_cv_on_an_empty_profile_invents_nothing(client):
@@ -111,6 +119,7 @@ def test_cv_on_an_empty_profile_invents_nothing(client):
 def _cv_of(ad_skills, his_skills, languages=None):
     """One ad, one profile, no API in the way — the CV must claim only what is really his."""
     from app.models import Job, Skill, UserProfile
+    from app.services import ats
     from app.services.assistant import _cv, _facts
     job = Job(title="Developer", company="NileSoft", location="Cairo", source="remotive",
               external_id="x", description="We need " + ", ".join(ad_skills) + " experience.",
@@ -120,20 +129,34 @@ def _cv_of(ad_skills, his_skills, languages=None):
         profile.skills.append(Skill(name=name, level=4, years=1))
     if languages:
         profile.languages = list(languages)
-    return _cv(job, _facts(job, profile))
+    return ats.normalize_cv(_cv(job, _facts(job, profile)))
+
+
+def _skills_lines(content):
+    """The SKILLS lines: what the ad asks for that he has, then his other skills."""
+    from app.services.ats import HEADINGS
+    tail = content.split("\nSKILLS\n", 1)[1]
+    lines = []
+    for line in tail.splitlines():
+        if line.strip().rstrip(":").upper() in HEADINGS:
+            break
+        if line.strip():
+            lines.append(line)
+    return lines[0], (lines[1] if len(lines) > 1 else "")
 
 
 def _owned_line(content):
-    marker = "SKILLS THIS AD ASKS FOR, WHICH YOU HAVE\n"
-    return content.split(marker)[1].split("\n")[0] if marker in content else ""
+    marker = "\nSKILLS\n"
+    return _skills_lines(content)[0] if marker in content else ""
 
 
 def test_a_similarly_spelled_skill_is_never_claimed_for_him():
     # "Java" is not "JavaScript". Saying he was asked for it and has it would put a skill
     # on his CV that he cannot back, which is the one thing this generator must never do.
     content = _cv_of(["Java"], ["JavaScript"])
-    assert "Java" not in _owned_line(content)
-    assert "JavaScript" in content.split("OTHER SKILLS\n")[1].split("\n")[0]
+    owned, other = _skills_lines(content)
+    assert owned.strip() == "JavaScript"
+    assert other == ""
     assert "java" in content.split("WHAT THIS AD ASKS FOR")[1].lower()
 
 

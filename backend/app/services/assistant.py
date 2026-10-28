@@ -15,7 +15,8 @@ import re
 from pydantic import BaseModel, ValidationError
 
 from ..models import Job, UserProfile
-from . import ai
+from . import ai, ats
+from .ats import ATS_HEADING
 from .matching import _norm_skill, job_skill_tags
 
 log = logging.getLogger("jobhunter.assistant")
@@ -81,7 +82,7 @@ def review_copy(text: str) -> str:
     cut them — the review copy keeps only the red legend.
     """
     body = text or ""
-    for marker in ("WHAT THIS AD ASKS FOR", REVIEW_REMINDER,
+    for marker in ("WHAT THIS AD ASKS FOR", ATS_HEADING, REVIEW_REMINDER,
                    "Generated with templates because", "Generated from your real profile data"):
         if marker in body:
             body = body.split(marker)[0]
@@ -151,6 +152,20 @@ def _first_sentence(text: str) -> str:
     """The first sentence of a text, whole and punctuated — never a mid-sentence splice."""
     first = re.split(r"(?<=[.!?])\s+", (text or "").strip())[0].strip()
     return _end_period(first)
+
+
+def _first_sentences(text: str, count: int) -> str:
+    """The first ``count`` sentences, so a pasted profile blurb cannot become a wall."""
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", _usable(text)) if s.strip()]
+    return " ".join(_end_period(s) for s in sentences[:count])
+
+
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
+
+
+def _usable(text: str) -> str:
+    """Extracted resume text can carry DEL/control bytes from the PDF bullets."""
+    return _CONTROL_RE.sub(" ", text or "")
 
 
 class _Generated(BaseModel):
@@ -241,6 +256,11 @@ def _cv_ai(job: Job, f: dict, extra_notes: str = "") -> str | None:
         "bullets only where they truthfully match his facts. "
         "If the candidate_resume fact is present, treat it as his base CV and keep its real content; "
         "reword, reorder and tailor, never add to it. "
+        "His base CV may be messy — broken lines, tables, columns, icons, mixed bullet styles, "
+        "dates written any way. Do not copy its layout: rebuild every fact into the clean "
+        "structure below, drop decorative separators, page numbers and repeated headers, and "
+        "write dates as 'Mon YYYY' (Jan 2024 - Present). "
+        "Use exactly one SKILLS section; never split it into several skills headings. "
         "Format for an applicant tracking system: plain single-column text, the ALL-CAPS headings "
         "given below, one line per item, no tables, no columns, no graphics, no emoji, no markdown, "
         "no brackets other than the suggestion brackets."
@@ -336,7 +356,11 @@ def generate_material(db, job: Job, profile: UserProfile | None, kind: str,
         # The same AI pass serves both: the marked copy he reviews here and the PDF later.
         ai_text = _cv_ai(job, f, extra_notes)
         content = _cv_pack(job, f, marked=True, ai_text=ai_text)
-        content += "\n\n" + "\n".join(_gap_notes(job, f)) + "\n\n" + REVIEW_REMINDER
+        send_copy = _cv_pack(job, f, marked=False, ai_text=ai_text)
+        report = ats.format_report(ats.ats_check(send_copy, job_skill_tags(job)))
+        content += ("\n\n" + "\n".join(_gap_notes(job, f))
+                    + "\n\n" + "\n".join(report)
+                    + "\n\n" + REVIEW_REMINDER)
         template_based = ai_text is None
 
     elif kind == "questions":
@@ -385,7 +409,7 @@ def _summary(job: Job, f: dict) -> str:
             period = f" ({start} - {end})" if start and end else f" ({start or end})"
         else:
             period = ""
-        first = _first_sentence(exp["description"])
+        first = _first_sentence(_usable(exp["description"]))
         detail = ""
         if first:
             # Lowercased and closed by this sentence's own period: "— managed ... ."
@@ -395,7 +419,7 @@ def _summary(job: Job, f: dict) -> str:
         parts.append(f"{name} has built {len(projects)} project(s), including "
                      + ", ".join(p["name"] for p in projects[:3]) + ".")
     if f["candidate_summary"]:
-        parts.append(_end_period(f["candidate_summary"]))
+        parts.append(_first_sentences(f["candidate_summary"], 2))
     parts.append("Applying for the " + job.title + " role"
                  + (f" at {job.company}" if job.company else "") + ".")
     return " ".join(parts)
@@ -574,7 +598,7 @@ def _cv(job: Job, f: dict, include_gaps: bool = True) -> str:
             at = ", ".join(x for x in [e.get("company"), e.get("location")] if x)
             lines.append(f"- {e['title']}" + (f" - {at}" if at else "")
                          + (f" ({period})" if period else ""))
-            for sentence in [s.strip() for s in re.split(r"[.;]\s+", e["description"] or "")
+            for sentence in [s.strip() for s in re.split(r"[.;·\n]\s*", _usable(e["description"]))
                              if s.strip()][:4]:
                 lines.append(f"    {_end_period(sentence)}")
     else:
@@ -606,6 +630,8 @@ def _cv(job: Job, f: dict, include_gaps: bool = True) -> str:
 def _cv_pack(job: Job, f: dict, marked: bool, ai_text: str | None = None) -> str:
     """The tailored CV, either as the review copy (additions in red) or the send copy.
 
+    Every copy first passes the ATS normalizer, so an AI draft that copied a messy
+    base CV still comes out with standard headings, one bullet style and plain text.
     ``marked`` puts every requirement this ad wants that his data cannot show into the
     skills block as a bracketed suggestion, which the PDF renderer draws red and
     underlined. ``marked=False`` keeps those same additions, bracketed text unwrapped
@@ -613,6 +639,7 @@ def _cv_pack(job: Job, f: dict, marked: bool, ai_text: str | None = None) -> str
     review marks — he decides himself what to stand behind before sending it.
     """
     body = (ai_text if ai_text is not None else _cv_ai(job, f)) or _cv(job, f, include_gaps=False)
+    body = ats.normalize_cv(body)
     body = _limit_suggestions(body)
     if not marked:
         return unmark_suggestions(body)

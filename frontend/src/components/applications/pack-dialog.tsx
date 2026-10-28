@@ -231,7 +231,7 @@ export function PackDialog({ pack, onClose, onChanged }: {
               <Link to="/profile" className="font-medium text-primary underline underline-offset-2">
                 {t("Resume & Profile")}
               </Link>
-              {t(". Red lines are the assistant's additions for this ad; the clean PDF prints them in black without the marks. Read it, confirm what you can back up, then apply yourself — nothing here is sent for you.")}
+              {t(". Red lines are the assistant's additions for this ad; the clean PDF prints them in black without the marks. The CV is rebuilt for ATS parsers — standard headings, plain single-column text — and the readiness score is at the bottom of this review. Read it, confirm what you can back up, then apply yourself — nothing here is sent for you.")}
             </p>
           </>
         )}

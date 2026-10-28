@@ -122,6 +122,7 @@ def test_cv_pdf_download_is_a_real_pdf(client):
     # The internal "what the ad asks for that you do not show" notes are for his eyes,
     # and the employer's copy must not carry them.
     assert b"WHAT THIS AD ASKS FOR" not in r.content
+    assert b"ATS READINESS CHECK" not in r.content
 
 
 def test_pdf_of_an_unprepared_kind_is_404(client):
