@@ -72,11 +72,13 @@ def render_text_pdf(content: str, name_line: bool = False, title: str = "Applica
             story.append(Paragraph(_markup(escape(text)), _STYLES["name"]))
         elif text.startswith("RED ITEMS ARE SUGGESTIONS"):
             story.append(Paragraph(_markup(escape(text)), _STYLES["note"]))
-        elif text.isupper() and len(text) > 2:
-            story.append(Paragraph(_markup(escape(text)), _STYLES["heading"]))
         elif line.startswith("- "):
+            # Before the heading test: a skills bullet such as "- AWS" is upper case too,
+            # and drawing it in 11.5pt bold would break the section for the parser.
             story.append(Paragraph(_markup(escape(text[2:])), _STYLES["bullet"],
                                    bulletText="\u2022"))
+        elif text.isupper() and len(text) > 2:
+            story.append(Paragraph(_markup(escape(text)), _STYLES["heading"]))
         elif line.startswith("    "):
             story.append(Paragraph(_markup(escape(text)), _STYLES["indent"]))
         else:

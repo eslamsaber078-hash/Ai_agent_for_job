@@ -121,6 +121,8 @@ def _normalize_dates(line: str) -> str:
     if re.search(r"\b(?:19|20)\d{2}\b", line):
         line = re.sub(r"(?i)\b(present|now|current|till date|to date)\b", "Present", line)
         line = re.sub(r"(?i)\b(\d{4})\s*[-–]\s*(\d{4})\b", r"\1 - \2", line)
+        # "Jan 2021-2023" and "2021-Present" read better with the dash spaced.
+        line = re.sub(r"(?<=[0-9])\s*-\s*(?=(?:19|20)\d{2}\b|Present\b)", " - ", line)
     return line
 
 
@@ -130,11 +132,19 @@ def _normalize_bullet(line: str) -> str:
     return line
 
 
-def _normalize_pipes(line: str, section: str | None) -> str:
-    """Roles written as 'Company | Title | Dates' read as a table to a parser."""
-    if section in (EXPERIENCE, PROJECTS, EDUCATION) and "|" in line and "@" not in line:
-        return re.sub(r"\s*\|\s*", " - ", line)
-    return line
+def _normalize_pipes(line: str) -> str:
+    """Roles written as 'Company | Title | Dates' and pasted tables read as columns.
+
+    The contact line may legitimately separate links with pipes, so it is handled as
+    header text and never reaches this function.
+    """
+    if "@" in line or "|" not in line:
+        return line
+    stripped = line.strip()
+    if stripped.startswith("|") and stripped.endswith("|"):
+        cells = [cell.strip() for cell in stripped.strip("|").split("|") if cell.strip()]
+        return ", ".join(cells) or line
+    return re.sub(r"\s*\|\s*", " - ", line)
 
 
 def normalize_cv(text: str) -> str:
@@ -143,7 +153,6 @@ def normalize_cv(text: str) -> str:
     header: list[str] = []
     sections: dict[str, list[str]] = {}
     current: list[str] | None = None
-    current_name: str | None = None
     for raw in (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         line = _clean_line(raw)
         if not line:
@@ -155,10 +164,9 @@ def normalize_cv(text: str) -> str:
             header.append(line)  # the name and contact lines before the first section
             continue
         if canonical is not None:
-            current_name = canonical
             current = sections.setdefault(canonical, [])
             continue
-        line = _normalize_pipes(_normalize_bullet(_normalize_dates(line)), current_name)
+        line = _normalize_pipes(_normalize_bullet(_normalize_dates(line)))
         current.append(line)
 
     ordered = _trim_blank(header)
@@ -199,12 +207,18 @@ def _keywords_in(text: str, keywords: list[str]) -> tuple[list[str], list[str]]:
     return found, missing
 
 
+def headings_in(text: str) -> set[str]:
+    """The canonical sections a text contains, e.g. {"SKILLS", "EDUCATION"}."""
+    found = {_canonical_heading(line) for line in (text or "").splitlines()}
+    found.discard(None)
+    return found
+
+
 def ats_check(text: str, required_keywords: list[str] | None = None) -> dict:
     """Score the send copy the way an ATS reads it, and name what still costs points."""
     body = text or ""
     keywords = [k for k in (required_keywords or []) if k]
-    headings = {_canonical_heading(line) for line in body.splitlines()}
-    headings.discard(None)
+    headings = headings_in(body)
     email = bool(_EMAIL.search(body))
     phone = _find_phone(body)
     standard = not _has_stray_heading(body)

@@ -93,29 +93,66 @@ def unmark_suggestions(text: str) -> str:
     """The send copy: the same CV, with the suggested additions printed as plain text.
 
     The addition keeps its words and loses only the brackets and the review furniture —
-    the legend, the separate suggestion list and the reminders are cut, so the document
-    the employer receives reads as one ordinary CV. He reviews the marked copy first;
-    this one is never generated on its own, only derived from that reviewed document.
+    the legend, the separate suggestion block's heading and the reminders are cut. The
+    suggested skills themselves move into his SKILLS section, because the employer's copy
+    must still carry the tailoring he reviewed; he vets every added line before sending.
     """
     body = review_copy(text)
-    lines = []
-    skipping = False
+    lines: list[str] = []
+    pending: list[str] = []
+    in_block = False
     for line in body.split("\n"):
         stripped = line.strip()
         if stripped == SUGGESTION_HEADING:
-            skipping = True
+            in_block = True
             continue
         if stripped.startswith("RED ITEMS ARE SUGGESTIONS"):
             continue
-        if skipping:
-            if not stripped or stripped.startswith("- "):
+        if in_block:
+            if not stripped:
                 continue
-            skipping = False
+            if stripped.startswith("- "):
+                item = _SUGGESTED_RE.sub(lambda m: m.group(1), stripped[2:]).strip()
+                if item:
+                    pending.append(item)
+                continue
+            in_block = False
         cleaned = _SUGGESTED_RE.sub(lambda m: m.group(1), line)
         cleaned = re.sub(r"[ \t]+", " ", cleaned).rstrip()
         lines.append(cleaned)
+    if pending:
+        lines = _fold_into_skills(lines, pending)
     result = "\n".join(lines)
     return re.sub(r"\n{3,}", "\n\n", result).strip()
+
+
+def _fold_into_skills(lines: list[str], items: list[str]) -> list[str]:
+    """Put the suggested skills inside the SKILLS section, in that section's own style.
+
+    A bullet list stays a bullet list and a comma list stays a comma list, so the merged
+    section never looks pasted together; a suggestion the section already states is not
+    repeated.
+    """
+    start = next((i for i in range(len(lines) - 1, -1, -1)
+                  if _heading(lines[i]).startswith("SKILL")), None)
+    if start is None:
+        # No skills section to fold into: give them a standard heading and re-order.
+        return ats.normalize_cv("\n".join(lines + ["", ats.SKILLS] + [f"- {i}" for i in items]))
+    end = next((i for i in range(start + 1, len(lines)) if _heading(lines[i])), len(lines))
+    stated = {cell.strip().casefold()
+              for line in lines[start + 1:end]
+              for cell in re.split(r"[,;]|^\s*-\s*", line)}
+    added = [item for item in items if item.casefold() not in stated]
+    if not added:
+        return lines
+    last = next((i for i in range(end - 1, start, -1) if lines[i].strip()), None)
+    if last is None:
+        lines[start + 1:start + 1] = [f"- {item}" for item in added]
+    elif lines[last].strip().startswith("- "):
+        lines[last + 1:last + 1] = [f"- {item}" for item in added]
+    else:
+        lines[last] = lines[last].rstrip(" ,;") + ", " + ", ".join(added)
+    return lines
 
 
 def _word_set(name: str) -> frozenset:
@@ -627,6 +664,20 @@ def _cv(job: Job, f: dict, include_gaps: bool = True) -> str:
     return "\n".join(lines)
 
 
+def _restore_education(cv_text: str, f: dict) -> str:
+    """The AI is told to leave out a section it has no facts for — but a section the
+    profile does fill must survive: a CV with no EDUCATION heading loses ATS points and
+    looks unfinished, even though the degree is on his profile."""
+    entries = f["education"]
+    if not entries or ats.EDUCATION in ats.headings_in(cv_text):
+        return cv_text
+    lines = []
+    for ed in entries:
+        degree = ed["degree"] + (f" in {ed['field']}" if ed["field"] else "")
+        lines.append("- " + " - ".join(x for x in (degree, ed["institution"]) if x))
+    return ats.normalize_cv(cv_text.rstrip() + "\n\n" + ats.EDUCATION + "\n" + "\n".join(lines))
+
+
 def _cv_pack(job: Job, f: dict, marked: bool, ai_text: str | None = None) -> str:
     """The tailored CV, either as the review copy (additions in red) or the send copy.
 
@@ -639,10 +690,8 @@ def _cv_pack(job: Job, f: dict, marked: bool, ai_text: str | None = None) -> str
     review marks — he decides himself what to stand behind before sending it.
     """
     body = (ai_text if ai_text is not None else _cv_ai(job, f)) or _cv(job, f, include_gaps=False)
-    body = ats.normalize_cv(body)
+    body = _restore_education(ats.normalize_cv(body), f)
     body = _limit_suggestions(body)
-    if not marked:
-        return unmark_suggestions(body)
     already = {item.casefold() for item in suggested_items(body)}
     items = [gap for gap in _unproven_requirements(job, f)
              if gap.casefold() not in already][:max(0, MAX_SUGGESTIONS - len(already))]
@@ -652,7 +701,9 @@ def _cv_pack(job: Job, f: dict, marked: bool, ai_text: str | None = None) -> str
     # that survived into this copy — never only the ones this function inserted.
     if suggested_items(body):
         body = body.rstrip() + "\n\n" + CV_LEGEND
-    return body
+    # The send copy is derived from this exact reviewed document, so the two can never
+    # disagree about which additions the ad earned.
+    return body if marked else unmark_suggestions(body)
 
 
 def cv_for_pdf(job: Job, profile: UserProfile | None, marked: bool = True) -> str:

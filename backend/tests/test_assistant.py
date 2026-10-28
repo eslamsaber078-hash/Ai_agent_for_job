@@ -378,17 +378,62 @@ def test_the_clean_cv_keeps_the_addition_and_drops_only_the_marks(monkeypatch):
     assert "Flutter" in clean
 
 
-def test_a_line_that_only_carried_a_suggestion_keeps_its_words_unmarked():
-    from app.services.assistant import unmark_suggestions
-    text = "SKILLS\n- Flutter\n- [[REST APIs]]\n\nEXPERIENCE\nFlutter, [[Dart]], Dart\n\n" \
-           "SUGGESTED FOR THIS AD - CONFIRM BEFORE SENDING\n- [[REST APIs]]\n\nEDUCATION\nBSc"
+def test_the_send_copy_folds_the_suggested_skills_into_the_skills_section():
+    from app.services.assistant import SUGGESTION_HEADING, unmark_suggestions
+    text = ("SKILLS\n- Flutter\n- REST APIs\n\nEXPERIENCE\n- Built apps in Dart\n\n"
+            + SUGGESTION_HEADING + "\n- [[REST APIs]]\n- [[Azure]]\n\nEDUCATION\nBSc")
     out = unmark_suggestions(text)
-    assert "- REST APIs" in out
-    assert "[[" not in out and "]]" not in out
-    assert "Flutter, Dart, Dart" in out
-    # The suggestion list was never part of the CV, so it does not ship in the send copy.
-    assert "SUGGESTED FOR THIS AD" not in out
+    # The heading that says "these are only suggestions" can never reach an employer.
+    assert SUGGESTION_HEADING not in out
+    # The additions still ship, as ordinary bullet lines of the same section.
+    assert "- Flutter\n- REST APIs\n- Azure" in out
+    assert out.count("REST APIs") == 1  # already stated, never printed twice
     assert "EDUCATION\nBSc" in out
+
+
+def test_a_comma_skills_line_absorbs_the_suggestions_in_the_same_style():
+    from app.services.assistant import SUGGESTION_HEADING, unmark_suggestions
+    text = ("SKILLS\nFlutter, Dart\n\nEXPERIENCE\n- Built apps\n\n"
+            + SUGGESTION_HEADING + "\n- [[Azure]]\n- [[Java]]\n\nEDUCATION\nBSc")
+    out = unmark_suggestions(text)
+    assert "Flutter, Dart, Azure, Java" in out
+    assert "- Azure" not in out  # the section stays a comma list, not a mixed one
+
+
+def test_the_send_copy_carries_the_same_missing_skill_the_review_shows(monkeypatch):
+    """The employer's copy must not lose an addition just because the AI did not mark it."""
+    from app.services import assistant as mod
+    job, profile = _cv_job_profile()
+    monkeypatch.setattr(mod.ai, "ai_available", lambda: True)
+    monkeypatch.setattr(mod.ai, "chat_text", lambda *a, **k: (
+        "ESLAM SABER\ne@example.com\n\nPROFESSIONAL SUMMARY\nFlutter developer who ships "
+        "mobile apps end to end and keeps the release flow simple.\n\nSKILLS\n- Flutter"))
+    mod._CV_AI_CACHE.clear()
+    marked = mod.cv_for_pdf(job, profile, marked=True)
+    clean = mod.cv_for_pdf(job, profile, marked=False)
+    mod._CV_AI_CACHE.clear()
+    assert "[[REST APIs]]" in marked  # offered in the review copy
+    assert "- Flutter\n- REST APIs" in clean  # and still there, unmarked, in the send copy
+    assert mod.SUGGESTION_HEADING not in clean
+
+
+def test_the_ats_score_is_computed_from_the_copy_the_employer_gets(client):
+    _setup_profile(client)
+    from app.database import SessionLocal
+    from app.models import Job, UserProfile
+    from app.services import assistant as mod
+
+    db = SessionLocal()
+    try:
+        data = mod.generate_material(db, db.get(Job, 1), db.get(UserProfile, 1), "cv")
+    finally:
+        db.close()
+    body = data["content"]
+    additions = mod.suggested_items(body)
+    assert additions  # the ad wants REST APIs, his profile does not show it
+    # Every addition is in the send copy, so the report must not name any of them
+    # as a keyword the employer's CV is missing.
+    assert not [line for line in body.splitlines() if "the CV does not" in line]
 
 
 def test_an_ai_that_brackets_twelve_skills_is_cut_back_to_eight(client, monkeypatch):

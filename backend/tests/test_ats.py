@@ -39,6 +39,33 @@ def test_suggestion_brackets_survive_the_rebuild():
     assert "[[REST APIs]]" in out
 
 
+def test_dates_the_ad_system_has_to_parse_are_all_normalized():
+    line = ats.normalize_cv(
+        "X\nx@example.com\n\nEXPERIENCE\n"
+        "- Dev - A (September 2020 - Sept 2021)\n"
+        "- Dev - B (2022-06 - 06/2023)\n"
+        "- Dev - C (2021-Present)")
+    assert "Sep 2020 - Sep 2021" in line
+    assert "Jun 2022 - Jun 2023" in line
+    assert "2021 - Present" in line
+
+
+def test_a_pasted_table_row_becomes_plain_text():
+    out = ats.normalize_cv("X\nx@example.com\n\nSKILLS\n| Flutter | Dart | REST APIs |")
+    assert "|" not in out
+    assert "Flutter, Dart, REST APIs" in out
+
+
+def test_the_normalizer_is_stable_when_run_twice():
+    once = ats.normalize_cv(MESSY)
+    assert ats.normalize_cv(once) == once
+
+
+def test_a_contact_line_keeps_its_pipe_separators():
+    out = ats.normalize_cv("X\nx@example.com | +20 109 672 6081 | github.com/x\n\nSKILLS\nFlutter")
+    assert "x@example.com | +20 109 672 6081 | github.com/x" in out
+
+
 def test_the_report_names_what_is_still_missing():
     out = ats.normalize_cv(MESSY)
     report = ats.ats_check(out, ["Flutter", "REST APIs", "Docker"])
@@ -66,6 +93,53 @@ def test_the_report_block_is_cut_from_both_pdf_copies():
     for copy in (review_copy(doc), unmark_suggestions(doc)):
         assert "ATS READINESS CHECK" not in copy
         assert "REST APIs" in copy
+
+
+def test_a_degree_on_his_profile_survives_a_draft_that_dropped_it():
+    """The AI leaves out sections it thinks are empty; a real degree must not vanish with
+    them, because the standard EDUCATION heading is part of what an ATS scores."""
+    from app import models
+    from app.services import assistant as mod
+    job = models.Job(title="Flutter Developer", company="NileSoft", location="Cairo",
+                     source="remotive", external_id="x", description="Flutter.",
+                     skills=["Flutter"])
+    profile = models.UserProfile(full_name="Eslam Saber", email="e@example.com")
+    profile.skills.append(models.Skill(name="Flutter", level=4, years=1))
+    profile.education.append(models.Education(degree="B.Sc. Computer Science",
+                                              institution="Cairo University"))
+    draft = ("ESLAM SABER\ne@example.com\n\nPROFESSIONAL SUMMARY\nFlutter developer.\n\n"
+             "SKILLS\n- Flutter\n\nEXPERIENCE\n- Flutter Developer - Nile (Jan 2023 - Present)")
+    out = mod._cv_pack(job, mod._facts(job, profile), marked=True, ai_text=draft)
+    assert "EDUCATION\n- B.Sc. Computer Science - Cairo University" in out
+    assert ats.EDUCATION in ats.headings_in(out)
+
+
+def test_no_education_section_is_invented_for_a_profile_without_one():
+    from app import models
+    from app.services import assistant as mod
+    job = models.Job(title="Flutter Developer", company="NileSoft", location="Cairo",
+                     source="remotive", external_id="x", description="Flutter.",
+                     skills=["Flutter"])
+    profile = models.UserProfile(full_name="Eslam Saber", email="e@example.com")
+    draft = "ESLAM SABER\ne@example.com\n\nSKILLS\n- Flutter"
+    out = mod._cv_pack(job, mod._facts(job, profile), marked=True, ai_text=draft)
+    assert ats.EDUCATION not in ats.headings_in(out)
+
+
+def test_an_all_caps_skill_bullet_is_drawn_as_a_bullet_not_a_heading():
+    """'- AWS' is upper case like a heading, but a 11.5pt bold line where a 10pt bullet
+    belongs breaks the skills list for the reader and for the parser."""
+    import io
+    from pypdf import PdfReader
+    from app.services import pdf as pdf_service
+    blob = pdf_service.render_text_pdf("SKILLS\n- AWS\n- Flutter", name_line=False)
+    page = PdfReader(io.BytesIO(blob)).pages[0]
+    stream = page["/Contents"].get_data().decode("latin-1")
+    at = stream.find("(AWS)")
+    assert at != -1
+    assert "/F1 10 Tf" in stream[max(0, at - 200):at]
+    # Bullets are real bullets: the body font draws one on that line.
+    assert "(\\177)" in stream[max(0, at - 200):at]
 
 
 def test_a_messy_ai_draft_is_normalized_before_it_reaches_him(monkeypatch):
