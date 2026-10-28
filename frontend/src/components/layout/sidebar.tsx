@@ -75,7 +75,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       <aside
         className={cn(
           "fixed inset-y-0 start-0 z-50 flex w-[276px] shrink-0 flex-col border-e border-border/70 bg-card/95 backdrop-blur-xl transition-transform duration-300 lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:translate-x-0",
-          open ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"
+          // The off-screen state belongs to the mobile drawer only. Without the max-lg
+          // guard it also lands on desktop, and in RTL it wins over lg:translate-x-0
+          // (same specificity, later in the sheet), hiding the whole sidebar.
+          open ? "translate-x-0" : "max-lg:-translate-x-full max-lg:rtl:translate-x-full"
         )}
       >
         <div className="flex h-[76px] items-center gap-3 border-b border-border/60 px-5">
