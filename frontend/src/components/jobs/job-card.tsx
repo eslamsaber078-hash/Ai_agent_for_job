@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Bookmark, BookmarkCheck, ExternalLink } from "lucide-react";
 import { type Job } from "@/lib/types";
 import { formatSalary, plainDescription, postedLabel } from "@/lib/format";
+import { employmentTypeLabel } from "@/lib/employment-type";
 import { useI18n } from "@/context/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ export const JobCard = memo(function JobCard({
   onTrack?: (job: Job) => void;
   saving?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, tt, lang } = useI18n();
   return (
     <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card p-5 shadow-soft transition-colors duration-200 hover:border-foreground/25 hover:bg-muted/30">
       <div className="flex items-start justify-between gap-3">
@@ -43,9 +44,9 @@ export const JobCard = memo(function JobCard({
       </div>
 
       <p className="mt-3 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-        {job.employment_type || t("Type n/a")}
+        {employmentTypeLabel(job.employment_type, t, lang) || t("Type n/a")}
         <span className="text-muted-foreground/50">·</span>
-        {job.experience_level || t("Level n/a")}
+        {tt(job.experience_level) || t("Level n/a")}
         {job.remote && (
           <>
             <span className="text-muted-foreground/50">·</span>

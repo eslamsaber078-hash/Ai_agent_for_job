@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { api, qs } from "@/lib/api";
+import { employmentTypeLabel } from "@/lib/employment-type";
 import { type Job, type JobPage, type JobSourceSite, sourceLabel } from "@/lib/types";
 import { useI18n } from "@/context/i18n";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ function FilterLabel({ children }: { children: React.ReactNode }) {
 
 export function FindJobsPage() {
   const { toast } = useToast();
-  const { t } = useI18n();
+  const { t, tt, lang } = useI18n();
   const [items, setItems] = useState<Job[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [filters, setFilters] = useState<Filters>({ levels: [], employment_types: [], sources: [] });
@@ -252,8 +253,8 @@ export function FindJobsPage() {
     q && { key: "q", label: `“${q}”`, clear: () => setQ("") },
     skill && { key: "skill", label: t("Skill: {skill}", { skill }), clear: () => setSkill("") },
     location && { key: "location", label: t("Location: {location}", { location }), clear: () => setLocation("") },
-    level && { key: "level", label: t(level), clear: () => setLevel("") },
-    empType && { key: "type", label: t(empType), clear: () => setEmpType("") },
+    level && { key: "level", label: tt(level), clear: () => setLevel("") },
+    empType && { key: "type", label: employmentTypeLabel(empType, t, lang), clear: () => setEmpType("") },
     source && { key: "source", label: sourceLabel(source), clear: () => setSource("") },
     remote && { key: "remote", label: t(remote === "true" ? "Remote only" : "Onsite only"), clear: () => setRemote("") },
   ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
@@ -437,14 +438,14 @@ export function FindJobsPage() {
               <FilterLabel>{t("Level")}</FilterLabel>
               <Select value={level} onChange={(e) => { setLevel(e.target.value); setPage(1); }}>
                 <option value="">{t("All levels")}</option>
-                {filters.levels.map((l) => <option key={l} value={l}>{t(l)}</option>)}
+                {filters.levels.map((l) => <option key={l} value={l}>{tt(l)}</option>)}
               </Select>
             </label>
             <label className="block">
               <FilterLabel>{t("Employment type")}</FilterLabel>
               <Select value={empType} onChange={(e) => { setEmpType(e.target.value); setPage(1); }}>
                 <option value="">{t("All types")}</option>
-                {filters.employment_types.map((et) => <option key={et} value={et}>{t(et)}</option>)}
+                {filters.employment_types.map((et) => <option key={et} value={et}>{employmentTypeLabel(et, t, lang)}</option>)}
               </Select>
             </label>
             <label className="block">

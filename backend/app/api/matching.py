@@ -13,9 +13,10 @@ router = APIRouter(prefix="/api", tags=["matching"])
 
 @router.get("/matches/{job_id}", response_model=MatchResult)
 def match_job(job_id: int, db: Session = Depends(get_db),
-              profile: UserProfile = Depends(get_current_profile)):
+              profile: UserProfile = Depends(get_current_profile),
+              lang: str = Query("en", pattern="^(en|ar)$")):
     job = get_job_or_404(db, job_id, profile.id)
-    return compute_match(job, profile)
+    return compute_match(job, profile, lang=lang)
 
 
 @router.get("/matches")
@@ -25,6 +26,7 @@ def list_matches(
     q: str = "",
     db: Session = Depends(get_db),
     profile: UserProfile = Depends(get_current_profile),
+    lang: str = Query("en", pattern="^(en|ar)$"),
 ):
     query = db.query(Job).filter(Job.is_active.is_(True), Job.profile_id == profile.id)
     if q:
@@ -34,7 +36,7 @@ def list_matches(
     jobs = query.all()
     results = []
     for job in jobs:
-        m = compute_match(job, profile, use_ai=False)
+        m = compute_match(job, profile, use_ai=False, lang=lang)
         if m["score"] >= min_score:
             m["job"] = dict(
                 id=job.id, title=job.title, company=job.company, location=job.location,

@@ -72,6 +72,32 @@ LEVEL_ORDER = {
     "lead": 4, "principal": 4, "head": 4, "manager": 4, "director": 4, "": 1,
 }
 
+# The level words boards write, spelled in Arabic for the Arabic summary. A value the
+# map does not know is left as the board wrote it rather than guessed at.
+_LEVEL_AR = {
+    "intern": "متدرب", "internship": "تدريب", "trainee": "متدرب", "entry": "مبتدئ",
+    "entry-level": "مبتدئ", "entry level": "مبتدئ", "junior": "جونيور",
+    "graduate": "حديث التخرج", "new": "مبتدئ", "mid": "متوسط الخبرة",
+    "mid-level": "متوسط الخبرة", "mid level": "متوسط الخبرة",
+    "intermediate": "متوسط الخبرة", "associate": "مساعد", "senior": "سينيور",
+    "staff": "ستاف", "specialist": "سبشياليست", "lead": "قائد فريق",
+    "principal": "برينسبال", "head": "رئيس قسم", "manager": "مدير",
+    "director": "مدير تنفيذي",
+}
+
+
+def _level_ar(text: str, lang: str) -> str:
+    if lang != "ar" or not text:
+        return text
+    return _LEVEL_AR.get(text.strip().lower(), text)
+
+
+def _levels_ar(values, lang: str) -> str:
+    """"entry, intern, junior" reads as Arabic words in the Arabic summary."""
+    words = [_level_ar(v, lang) for v in values]
+    return ("، " if lang == "ar" else ", ").join(words)
+
+
 # Requirements a posting must name before its skills factor counts as full evidence.
 MIN_SKILL_EVIDENCE = 3
 
@@ -281,8 +307,9 @@ def _desired_titles(profile: UserProfile) -> list[str]:
     return out
 
 
-def _skills_factor(job: Job, context: dict, job_tags: list[str]) -> tuple[float, str, list[str], list[str], list[str]]:
+def _skills_factor(job: Job, context: dict, job_tags: list[str], lang: str = "en") -> tuple[float, str, list[str], list[str], list[str]]:
     """How much of what THIS posting asks for, his profile + CV already covers."""
+    ar = lang == "ar"
     evidence = context["evidence"]
     matched, missing, from_cv = [], [], []
     points = maximum = 0.0
@@ -298,19 +325,23 @@ def _skills_factor(job: Job, context: dict, job_tags: list[str]) -> tuple[float,
             if got[2]:
                 from_cv.append(got[0])
     if not job_tags:
-        return (UNKNOWN, "The posting lists no requirements, so skills cannot be checked",
+        return (UNKNOWN, ("الإعلان مش كاتب متطلبات، فمينفعش نتأكد من المهارات" if ar
+                          else "The posting lists no requirements, so skills cannot be checked"),
                 [], [], [])
     score = (points / maximum) * 100 if maximum else 0.0
-    detail = f"Matched {len(matched)}/{len(job_tags)} requirements the posting states"
+    detail = (f"مطابق {len(matched)}/{len(job_tags)} من المتطلبات اللي الإعلان كاتبها" if ar
+              else f"Matched {len(matched)}/{len(job_tags)} requirements the posting states")
     if len(job_tags) < MIN_SKILL_EVIDENCE:
         # An ad that names one or two requirements leaves the rest unknown. Half-credit
         # for the unnamed part: a single shared keyword must not claim a full match, but
         # it must not be treated as a mismatch either — that buried his Flutter roles.
         gap = MIN_SKILL_EVIDENCE - len(job_tags)
         score = (points + 0.5 * gap) / (maximum + gap) * 100
-        detail += f" — only {len(job_tags)} stated, the rest is unverified"
+        detail += (f" — مكتوب {len(job_tags)} بس، والباقي مش متأكد منه" if ar
+                   else f" — only {len(job_tags)} stated, the rest is unverified")
     if from_cv:
-        detail += f" ({', '.join(sorted(from_cv))} proven by your CV and experience text)"
+        detail += (f" ({', '.join(sorted(from_cv))} مثبتة من سيرتك وخبراتك المكتوبة)" if ar
+                   else f" ({', '.join(sorted(from_cv))} proven by your CV and experience text)")
     return score, detail, matched, missing, from_cv
 
 
@@ -333,22 +364,36 @@ def _cv_level(profile: UserProfile) -> tuple[int, str] | None:
     Read from the titles he actually held first (a "Senior" title is evidence), then
     from the years he entered against his strongest skill. When the CV says nothing
     about either, nothing is guessed and None comes back.
+
+    The second element is a wording tag ("title"/"years") plus the raw value, so the
+    caller can spell the sentence in either language.
     """
     held = [pair for pair in (_level_in_title(e.title) for e in profile.experiences) if pair]
     if held:
         order, word = max(held)
-        return order, f"you have worked as a {word}"
+        return order, f"title|{word}"
     years = max((s.years or 0 for s in profile.skills), default=0)
     if years <= 0:
         return None
     if years >= 5:
-        return 3, f"{years:g} years in the field"
+        return 3, f"years|{years:g}"
     if years >= 2:
-        return 2, f"{years:g} years in the field"
-    return 1, f"{years:g} year in the field"
+        return 2, f"years|{years:g}"
+    return 1, f"years|{years:g}"
 
 
-def _level_factor(job: Job, context: dict) -> tuple[float, str, str]:
+def _cv_level_wording(tag: str, lang: str) -> str:
+    """Spell the CV-level evidence the way `_cv_level` tagged it, in either language."""
+    kind, _, value = tag.partition("|")
+    if kind == "title":
+        return (f"اشتغلت قبل كده {value}" if lang == "ar" else f"you have worked as a {value}")
+    n = float(value)
+    if lang == "ar":
+        return f"{n:g} سنين في المجال" if n >= 2 else f"{n:g} سنة في المجال"
+    return f"{n:g} years in the field" if n >= 2 else f"{n:g} year in the field"
+
+
+def _level_factor(job: Job, context: dict, lang: str = "en") -> tuple[float, str, str]:
     """Score the seniority, and hand back the level we read ("" when nothing says one).
 
     The label goes into the written summary too, so the concerns never claim the
@@ -357,11 +402,14 @@ def _level_factor(job: Job, context: dict) -> tuple[float, str, str]:
     When he set no target levels, an HR reader still judges the ad against the CV:
     the seniority of his own last titles and the years he entered decide the ceiling.
     """
+    ar = lang == "ar"
     raw = (job.experience_level or "").strip().lower()
     targets = context["targets"]
     label = job.experience_level
     from_title = False
     if raw in ("any", "any level", "all levels"):
+        if ar:
+            return 80.0, f"المستوى: {_level_ar(job.experience_level, lang)} — مفتوح لأي مستوى", label
         return 80.0, f"Level: {job.experience_level} — open to any", label
     order = LEVEL_ORDER.get(raw) if raw else None
     if not raw:
@@ -370,23 +418,34 @@ def _level_factor(job: Job, context: dict) -> tuple[float, str, str]:
             order, label = in_title
             from_title = True
     if order is None:
+        if ar:
+            return (UNKNOWN, ("الإعلان مش محدد مستوى خبرة" if not raw
+                              else f"المستوى: {job.experience_level} — مش مستوى معروف عندنا"), "")
         return (UNKNOWN, ("The posting states no experience level" if not raw
                           else f"Level: {job.experience_level} — not a level we recognise"), "")
-    noted = " (read from the title)" if from_title else ""
+    shown = _level_ar(label, lang)
+    noted = " (مقروء من المسمى)" if (from_title and ar) else (" (read from the title)" if from_title else "")
     if targets:
         ceiling = max(LEVEL_ORDER.get(t, 1) for t in targets)
-        basis = f"your target ({', '.join(sorted(targets))})"
+        basis = (f"المستوى المستهدف بتاعك ({_levels_ar(sorted(targets), lang)})" if ar
+                 else f"your target ({', '.join(sorted(targets))})")
     else:
         derived = context["cv_level"]
         if derived is None:
+            if ar:
+                return 50.0, f"المستوى: {shown} (انت محددتش مستوى مستهدف)", label
             return 50.0, f"Level: {label} (you set no target level)", label
-        ceiling, cv_shows = derived
-        basis = f"what your CV shows ({cv_shows})"
+        ceiling, tag = derived
+        basis = (f"اللي سيرتك بتوريه ({_cv_level_wording(tag, 'ar')})" if ar
+                 else f"what your CV shows ({_cv_level_wording(tag, 'en')})")
     if order <= ceiling:
-        return 100.0, f"Level {label} fits {basis}{noted}", label
+        return 100.0, (f"مستوى {shown} مناسب مع {basis}{noted}" if ar
+                       else f"Level {label} fits {basis}{noted}"), label
     if order == ceiling + 1:
-        return 55.0, f"Level {label} is one step above {basis}{noted}", label
-    return 20.0, f"Level {label} is {order - ceiling} steps above {basis}{noted}", label
+        return 55.0, (f"مستوى {shown} درجة أعلى من {basis}{noted}" if ar
+                      else f"Level {label} is one step above {basis}{noted}"), label
+    return 20.0, (f"مستوى {shown} أعلى بـ {order - ceiling} درجات من {basis}{noted}" if ar
+                  else f"Level {label} is {order - ceiling} steps above {basis}{noted}"), label
 
 
 _WORLD_WORDS = {"remote", "remotely", "anywhere", "worldwide", "global", "world",
@@ -459,52 +518,84 @@ def _where_wording(job: Job) -> str:
     return (job.location or "").strip() or _place_label(job)
 
 
-def _location_factor(job: Job, profile: UserProfile, context: dict) -> tuple[float, str]:
+_PREF_AR = {"remote": "ريموت", "hybrid": "هجين", "onsite": "حضوري", "open": "مفتوح"}
+
+
+def _location_factor(job: Job, profile: UserProfile, context: dict, lang: str = "en") -> tuple[float, str]:
     """Where the posting really is, judged against where he can work.
 
     "Remote" written as the location counts even when the source left the flag off, and
     a remote job restricted to one country he cannot live in is scored as the near-nothing
     it is for him.
     """
+    ar = lang == "ar"
     place = f"{job.location} {job.country}".strip().lower()
     words = set(_WORD.findall(place))
     home = context["home"]
     country = home.lower()
     where = _place_label(job)
+    unstated = "بلد مش محدد" if ar else "an unstated country"
     # A board can write "Remote" as the place without setting the remote flag; when the
     # location says nothing but "remote", the posting is open from anywhere.
     worldwide = not words or words <= _WORLD_WORDS or bool(words & {"anywhere", "worldwide", "global", "world"})
     if job.remote or worldwide:
         if country and country in place:
+            if ar:
+                return 100.0, f"ريموت، وبيذكر {home} — بلدك انت"
             return 100.0, f"Remote, and it names {home} — your own country"
         named = _title_place(job.title)
         if named:
             if any(w in named.lower() for w in [country, (profile.city or "").lower()] if w):
+                if ar:
+                    return 100.0, f"المسمى بتاعه بيقول {named}، وده مكان تقدر تشتغل فيه"
                 return 100.0, f"Its headline says {named}, which is where you can work"
+            if ar:
+                return 20.0, (f"المسمى بتاعه بيقول {named} — ريموت بس مش متاح غير من هناك "
+                              f"(وانت في {home or unstated})")
             return 20.0, (f"Its headline says {named} — remote, but only reachable from there "
                           f"(you are in {home or 'an unstated country'})")
         if worldwide:
+            pref = _PREF_AR.get(context["pref"], context["pref"]) if ar else context["pref"]
+            if ar:
+                return 90.0, f"ريموت من غير تحديد بلد؛ وتفضيلك هو {pref}"
             return 90.0, f"Remote with no country limit; your preference is {context['pref']}"
         if words & _REGION_WORDS:
+            if ar:
+                return 55.0, f"ريموت، بس محدود بمنطقة {where}"
             return 55.0, f"Remote, but limited to the {where} region"
+        if ar:
+            return 20.0, f"ريموت، بس لـ {where} — وانت في {home or 'مصر'}"
         return 20.0, f"Remote, but only for {where} — you are in {home or 'Egypt'}"
     if not words:
-        return UNKNOWN, "The posting states no location"
+        return UNKNOWN, ("الإعلان مش محدد مكان" if ar else "The posting states no location")
     wanted = context["wanted_places"]
     if any(w in place for w in wanted if len(w) > 2):
+        if ar:
+            return 100.0, f"{job.location} من الأماكن اللي اخترتها"
         return 100.0, f"{job.location} is one of the places you chose"
     if not wanted:
         # He never listed cities, so his own address is what an HR reader checks.
         city = (profile.city or "").strip().lower()
         if city and len(city) > 2 and city in place:
+            if ar:
+                return 100.0, f"{job.location} هي المدينة اللي انت ساكن فيها ({profile.city})"
             return 100.0, f"{job.location} is the city you live in ({profile.city})"
         if country and country in place:
+            if ar:
+                return 85.0, f"{job.country or job.location} هو بلدك"
             return 85.0, f"{job.country or job.location} is your country"
     if country and country in place:
+        if ar:
+            return 85.0, f"{job.country or job.location} هو بلدك، بس مش من المدن اللي اخترتها"
         return 85.0, f"{job.country or job.location} is your country, though not one of your cities"
     if not wanted and not profile.city:
+        if ar:
+            return 15.0, (f"{_where_wording(job)} مش مكان بروفايلك بيقول انك بتشتغل فيه، "
+                          f"ومش ريموت")
         return 15.0, (f"{_where_wording(job)} is not a place your profile says you work in, "
                       f"and it is not remote")
+    if ar:
+        return 15.0, f"{_where_wording(job)} برا الأماكن اللي اخترتها، ومش ريموت"
     return 15.0, f"{_where_wording(job)} is outside the places you chose, and it is not remote"
 
 
@@ -525,46 +616,64 @@ def _cv_role_forms(profile: UserProfile) -> list[str]:
     return out
 
 
-def _title_factor(job: Job, context: dict) -> tuple[float, str]:
+def _title_factor(job: Job, context: dict, lang: str = "en") -> tuple[float, str]:
+    ar = lang == "ar"
     desired = context["desired"]
     proven = context["role_forms"]
     title = (job.title or "").lower()
     if not desired and not proven:
-        return 50.0, "You have not set desired job titles"
+        return 50.0, ("انت محددتش مسميات وظايف مستهدفة" if ar else "You have not set desired job titles")
     if any(t in title for t in desired):
-        return 100.0, f"\"{job.title}\" is one of the roles you are after"
+        return 100.0, (f'"{job.title}" من الأدوار اللي انت بتدوّر عليها' if ar
+                       else f"\"{job.title}\" is one of the roles you are after")
     shown = next((p for p in proven if p in title), "")
     if shown:
         # He has done this job; an HR reader weights proven history above a wish list.
         return (85.0 if desired else 90.0), (
+            f'"{job.title}" هو الدور اللي سيرتك بتوريه ({shown})'
+            + (", بس مش من المسميات اللي انت محددها" if desired else "") if ar else
             f"\"{job.title}\" is the role your CV already shows ({shown})"
             + (", though not one of the titles you set" if desired else ""))
     words = set(_WORD.findall(title))
     shared = sorted(context["desired_tokens"] & words)
     if shared:
-        return 60.0, f"Shares {', '.join(shared)} with your target roles, but is not one of them"
+        return 60.0, (f"مشترك مع أدوارك المستهدفة في: {', '.join(shared)}، بس مش واحد منهم" if ar
+                      else f"Shares {', '.join(shared)} with your target roles, but is not one of them")
     shared_cv = sorted(context["role_tokens"] & words)
     if shared_cv:
-        return 55.0, f"Shares {', '.join(shared_cv)} with the roles on your CV, but is not one of them"
+        return 55.0, (f"مشترك مع أدوار سيرتك في: {', '.join(shared_cv)}، بس مش واحد منهم" if ar
+                      else f"Shares {', '.join(shared_cv)} with the roles on your CV, but is not one of them")
     named = ", ".join(context["desired_raw"] or proven)
-    return 20.0, f"\"{job.title}\" is a different role from {named}"
+    return 20.0, (f'"{job.title}" دور مختلف عن {named}' if ar
+                  else f"\"{job.title}\" is a different role from {named}")
 
 
-def _salary_factor(job: Job, profile: UserProfile) -> tuple[float, str]:
+def _salary_factor(job: Job, profile: UserProfile, lang: str = "en") -> tuple[float, str]:
+    ar = lang == "ar"
     if not job.salary_min:
-        return UNKNOWN, "The posting publishes no salary"
+        return UNKNOWN, ("الإعلان منشرش مرتب" if ar else "The posting publishes no salary")
     if not profile.min_salary:
+        if ar:
+            return 50.0, f"الوظيفة بتدفع {job.salary_min}+ {job.salary_currency or ''}؛ وانت محددتش حد أدنى"
         return 50.0, f"Job pays {job.salary_min}+ {job.salary_currency or ''}; you set no minimum"
     both = f"{job.salary_min}-{job.salary_max or '?'} {job.salary_currency or '?'}"
     mine = f"{profile.min_salary} {profile.salary_currency or ''}".strip()
     job_cur = (job.salary_currency or "").upper()
     my_cur = (profile.salary_currency or "").upper()
     if job_cur and my_cur and job_cur != my_cur:
+        if ar:
+            return UNKNOWN, f"{both} — عملة مختلفة، فمينفعش نقارنها بالحد الأدنى بتاعك {mine}"
         return UNKNOWN, f"Job pays {both} — a different currency, so it cannot be compared to your {mine}"
     if job.salary_min >= profile.min_salary:
+        if ar:
+            return 100.0, f"{both} بتحقق الحد الأدنى بتاعك {mine}"
         return 100.0, f"{both} meets your minimum of {mine}"
     if job.salary_max and job.salary_max >= profile.min_salary:
+        if ar:
+            return 70.0, f"{both} بتوصل للحد الأدنى بتاعك {mine} في أعلى رينج بس"
         return 70.0, f"{both} only reaches your minimum of {mine} at the top"
+    if ar:
+        return 20.0, f"{both} أقل من الحد الأدنى بتاعك {mine}"
     return 20.0, f"{both} is under your minimum of {mine}"
 
 
@@ -580,14 +689,14 @@ class _AIAnalysis(BaseModel):
 _NARRATIVE_CACHE: dict[tuple[int, str], _AIAnalysis | None] = {}
 
 
-def _narrative_ai(job: Job, profile: UserProfile, facts: dict) -> _AIAnalysis | None:
+def _narrative_ai(job: Job, profile: UserProfile, facts: dict, lang: str = "en") -> _AIAnalysis | None:
     if not ai.ai_available():
         return None
     signature = (
         _evidence_text(profile) + "|" + ",".join(sorted(profile.desired_titles or []))
         + "|" + ",".join(sorted(profile.target_levels or []))
     )
-    key = (job.id, signature)
+    key = (job.id, signature, lang)
     if key in _NARRATIVE_CACHE:
         return _NARRATIVE_CACHE[key]
     payload = {
@@ -608,6 +717,10 @@ def _narrative_ai(job: Job, profile: UserProfile, facts: dict) -> _AIAnalysis | 
         "If the candidate profile lacks information, say so instead of assuming. "
         "Respond ONLY with JSON: {\"why_match\": string, \"concerns\": string, \"next_steps\": [string]}."
     )
+    if lang == "ar":
+        system += (" اكتب كل النصوص بالعربي المصري. متكتبش أي كلمة إنجليزية زي \"candidate\" "
+                   "أو \"skills\" — استخدم «المتقدم» و«مهاراتك» وسمّي الوظيفة والمهارات "
+                   "بأسمائها زي ما هي.")
     data = ai.chat_json(system, json.dumps(payload, ensure_ascii=False))
     result = None
     if data:
@@ -621,7 +734,7 @@ def _narrative_ai(job: Job, profile: UserProfile, facts: dict) -> _AIAnalysis | 
     return result
 
 
-def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True) -> dict:
+def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, lang: str = "en") -> dict:
     """Compute a transparent 0-100 match score with a full breakdown.
 
     ``use_ai`` is turned off by list endpoints: the score is deterministic, so
@@ -632,18 +745,18 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True) ->
     credit for it, so the number reads as confirmed fit rather than polite filler.
     """
     if profile is None:
-        return _empty_match(job)
+        return _empty_match(job, lang)
     if not any([profile.skills, profile.experiences, profile.projects,
                 profile.desired_titles, profile.summary, profile.resume_text]):
-        return _empty_match(job)
+        return _empty_match(job, lang)
 
     context = profile_context(profile)
     job_tags = job_skill_tags(job)
-    skill_score, skill_detail, matched, missing, from_cv = _skills_factor(job, context, job_tags)
-    level_score, level_detail, level_label = _level_factor(job, context)
-    location_score, location_detail = _location_factor(job, profile, context)
-    title_score, title_detail = _title_factor(job, context)
-    salary_score, salary_detail = _salary_factor(job, profile)
+    skill_score, skill_detail, matched, missing, from_cv = _skills_factor(job, context, job_tags, lang)
+    level_score, level_detail, level_label = _level_factor(job, context, lang)
+    location_score, location_detail = _location_factor(job, profile, context, lang)
+    title_score, title_detail = _title_factor(job, context, lang)
+    salary_score, salary_detail = _salary_factor(job, profile, lang)
     title_hit = title_score == 100.0
 
     # Title outweighs location and salary: a posting for a role he is not after is not a
@@ -665,8 +778,11 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True) ->
     hard_gap = ""
     if headline_gaps:
         total = min(total, HEADLINE_GAP_CAP)
-        hard_gap = ("The job title itself asks for " + ", ".join(headline_gaps[:3])
-                    + ", which your CV and skills do not show yet.")
+        gap_list = ", ".join(headline_gaps[:3])
+        if lang == "ar":
+            hard_gap = f"المسمى الوظيفي نفسه طالب {gap_list}، ودي مش ظاهرة في سيرتك ومهاراتك لسه."
+        else:
+            hard_gap = f"The job title itself asks for {gap_list}, which your CV and skills do not show yet."
     score = max(0, min(100, round(total)))
 
     factors = [
@@ -678,10 +794,10 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True) ->
     ]
 
     why = _why_match(job, profile, matched, from_cv, title_hit, level_score, level_label,
-                     location_score, job_tags)
+                     location_score, job_tags, lang)
     concerns = _concerns(job, profile, missing, level_score, level_label, location_score,
-                         location_detail, hard_gap)
-    steps = _next_steps(job, missing, score, profile)
+                         location_detail, hard_gap, lang)
+    steps = _next_steps(job, missing, score, profile, lang)
 
     ai_enhanced = False
     if use_ai and ai.ai_available():
@@ -701,7 +817,7 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True) ->
             "headline_gap": hard_gap,
             "desired_titles": profile.desired_titles,
         }
-        enriched = _narrative_ai(job, profile, facts)
+        enriched = _narrative_ai(job, profile, facts, lang)
         if enriched:
             why = enriched.why_match or why
             concerns = enriched.concerns or concerns
@@ -726,7 +842,20 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True) ->
     )
 
 
-def _empty_match(job: Job) -> dict:
+def _empty_match(job: Job, lang: str = "en") -> dict:
+    ar = lang == "ar"
+    if ar:
+        return dict(
+            job_id=job.id, score=0, estimate=True,
+            matched_skills=[], missing_skills=job_skill_tags(job),
+            factors=[dict(label="Profile", detail="لسه مفيش بروفايل أو سيرة ذاتية — السكور محتاج واحد منهم.",
+                          weight=1.0, score=0)],
+            why_match="ضيف مهاراتك أو ارفع السيرة الذاتية في صفحة السيرة والملف عشان يظهرلك سكور المطابقة.",
+            concerns="لسه مفيش حاجة معروفة عن خبراتك.",
+            next_steps=["ارفع سيرتك الذاتية واملأ المهارات والخبرات والمسميات المطلوبة في صفحة السيرة والملف."],
+            hard_gap="",
+            ai_enhanced=False,
+        )
     return dict(
         job_id=job.id, score=0, estimate=True,
         matched_skills=[], missing_skills=job_skill_tags(job),
@@ -741,56 +870,84 @@ def _empty_match(job: Job) -> dict:
 
 
 def _why_match(job, profile, matched, from_cv, title_hit, level_score, level_label,
-               location_score, job_tags) -> str:
+               location_score, job_tags, lang: str = "en") -> str:
+    ar = lang == "ar"
     parts = []
     if matched:
-        note = f" ({len(from_cv)} proven by your CV and experience text)" if from_cv else ""
-        parts.append(f"You already have {len(matched)} of the {len(job_tags)} "
-                     f"skills this posting asks for{note}: {', '.join(matched[:6])}.")
+        if ar:
+            note = f" ({len(from_cv)} منهم مثبتة من سيرتك الذاتية وخبراتك)" if from_cv else ""
+            parts.append(f"عندك {len(matched)} من أصل {len(job_tags)} مهارة الإعلان طالبها{note}: "
+                         f"{', '.join(matched[:6])}.")
+        else:
+            note = f" ({len(from_cv)} proven by your CV and experience text)" if from_cv else ""
+            parts.append(f"You already have {len(matched)} of the {len(job_tags)} "
+                         f"skills this posting asks for{note}: {', '.join(matched[:6])}.")
     if title_hit:
-        parts.append(f"The title \"{job.title}\" is one of the roles you are after.")
+        parts.append(f"المسمى \"{job.title}\" من الأدوار اللي انت بتدوّر عليها." if ar
+                     else f"The title \"{job.title}\" is one of the roles you are after.")
     if level_score >= 80 and level_label:
-        parts.append(f"Its level ({level_label}) fits your target.")
+        parts.append(f"مستوى الإعلان ({_level_ar(level_label, lang)}) مناسب للهدف بتاعك." if ar
+                     else f"Its level ({level_label}) fits your target.")
     if location_score >= 90:
-        parts.append(f"Location works for you ({_where_wording(job)}"
+        parts.append(f"المكان مناسب ليك ({_where_wording(job)}"
+                     f"{', ريموت' if job.remote else ''})." if ar else
+                     f"Location works for you ({_where_wording(job)}"
                      f"{', remote' if job.remote else ''}).")
     if profile.projects:
         n = len(profile.projects)
-        parts.append(f"Your {n} portfolio project{'' if n == 1 else 's'} can support the application.")
+        if ar:
+            projects_word = "مشروع واحد" if n == 1 else f"{n} مشاريع"
+            parts.append(f"معاك {projects_word} بورتفوليو يدعّم طلب التقديم.")
+        else:
+            parts.append(f"Your {n} portfolio project{'' if n == 1 else 's'} can support the application.")
     if not parts:
-        parts.append("This posting states little that your profile and CV already cover, "
-                     "so there is nothing here that can score high yet.")
+        parts.append("الإعلان ده مكتوب فيه حاجات قليلة بتغطيها بروفايلك وسيرتك، فمفيش حاجة هنا تاخد سكور عالي لسه." if ar
+                     else "This posting states little that your profile and CV already cover, "
+                          "so there is nothing here that can score high yet.")
     return " ".join(parts)
 
 
 def _concerns(job, profile, missing, level_score, level_label, location_score,
-              location_detail, hard_gap="") -> str:
+              location_detail, hard_gap="", lang: str = "en") -> str:
+    ar = lang == "ar"
     parts = []
     if hard_gap:
         parts.append(hard_gap)
     if missing:
-        parts.append(f"Skills to strengthen for this one: {', '.join(missing[:8])}.")
+        if ar:
+            parts.append(f"مهارات محتاج تقويها عشان الإعلان ده: {', '.join(missing[:8])}.")
+        else:
+            parts.append(f"Skills to strengthen for this one: {', '.join(missing[:8])}.")
     if level_label and level_score < 60:
-        parts.append(f"Its level ({level_label}) is above what you are targeting.")
+        parts.append(f"مستواه ({_level_ar(level_label, lang)}) أعلى من اللي انت مستهدفه." if ar
+                     else f"Its level ({level_label}) is above what you are targeting.")
     elif not level_label:
-        parts.append("It never states which level it wants, so that part stays unverified.")
+        parts.append("الإعلان مبيقولش عايز مستوى إيه، فالنقطة دي مش متأكدة." if ar
+                     else "It never states which level it wants, so that part stays unverified.")
     if location_score < 60:
         # Quoting the scored detail keeps the prose from inventing a second, and usually
         # contradictory, description of the place.
-        parts.append(f"Where it is worked: {location_detail}.")
+        parts.append(f"مكان الشغل مش مناسب ليك." if ar else f"Where it is worked: {location_detail}.")
     if not job.salary_min:
-        parts.append("No salary published, so your minimum cannot be checked.")
+        parts.append("المرتب مش منشور، فمينفعش نتأكد من الحد الأدنى بتاعك." if ar
+                     else "No salary published, so your minimum cannot be checked.")
     if not parts:
-        parts.append("No major concerns detected from what your profile and CV state.")
+        parts.append("مفيش مخاوف كبيرة واضحة من اللي مكتوب في بروفايلك وسيرتك." if ar
+                     else "No major concerns detected from what your profile and CV state.")
     return " ".join(parts)
 
 
-def _next_steps(job, missing, score, profile) -> list[str]:
+def _next_steps(job, missing, score, profile, lang: str = "en") -> list[str]:
+    ar = lang == "ar"
     steps = []
     if missing:
-        steps.append(f"Build a small project or take a course covering: {', '.join(missing[:4])}.")
+        steps.append(f"اعمل مشروع صغير أو خد كورس يغطي: {', '.join(missing[:4])}." if ar
+                     else f"Build a small project or take a course covering: {', '.join(missing[:4])}.")
     if not profile.projects:
-        steps.append("Add at least one portfolio project related to this role.")
-    steps.append("Tailor your resume summary to the job description before applying.")
-    steps.append("Research the company and prepare 2-3 questions for the interview.")
+        steps.append("ضيف على الأقل مشروع بورتفوليو واحد له علاقة بالدور ده." if ar
+                     else "Add at least one portfolio project related to this role.")
+    steps.append("ظبّط ملخص السيرة الذاتية على وصف الوظيفة قبل ما تقدّم." if ar
+                 else "Tailor your resume summary to the job description before applying.")
+    steps.append("اقرا عن الشركة وجهّز سؤالين تلاتة للانترفيو." if ar
+                 else "Research the company and prepare 2-3 questions for the interview.")
     return steps

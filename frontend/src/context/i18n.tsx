@@ -7,9 +7,11 @@ interface I18nCtx {
   lang: Lang;
   setLang: (lang: Lang) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  /** Translates each part of a comma-joined provider value ("Entry-Level, Junior"). */
+  tt: (text: string) => string;
 }
 
-const Ctx = createContext<I18nCtx>({ lang: "en", setLang: () => {}, t: (key) => key });
+const Ctx = createContext<I18nCtx>({ lang: "en", setLang: () => {}, t: (key) => key, tt: (text) => text });
 
 function initialLang(): Lang {
   const saved = localStorage.getItem("jobhunter-lang");
@@ -36,7 +38,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return text;
   };
 
-  return <Ctx.Provider value={{ lang, setLang, t }}>{children}</Ctx.Provider>;
+  const tt = (text: string) => {
+    if (!text) return text;
+    return text
+      .split(", ")
+      .map((part) => t(part.trim()))
+      .join(lang === "ar" ? "، " : ", ");
+  };
+
+  return <Ctx.Provider value={{ lang, setLang, t, tt }}>{children}</Ctx.Provider>;
 }
 
 export function useI18n() {

@@ -120,7 +120,7 @@ def test_list_endpoints_do_not_call_ai_per_job(client, monkeypatch):
     monkeypatch.setattr(matching_service.ai, "openai_available", lambda: True)
     calls: list[int] = []
 
-    def fake_narrative(job, profile, facts):
+    def fake_narrative(job, profile, facts, lang="en"):
         calls.append(job.id)
         return None
 

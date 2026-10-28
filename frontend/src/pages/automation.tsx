@@ -520,7 +520,7 @@ export function AutomationPage() {
                         onClick={() => setExpandedRun(expandedRun === r.id ? null : r.id)}
                         aria-expanded={expandedRun === r.id}
                       >
-                        <Badge variant={r.status === "success" ? "success" : "danger"}>{r.status}</Badge>
+                        <Badge variant={r.status === "success" ? "success" : "danger"}>{t(r.status)}</Badge>
                         <span className="text-[11px] text-muted-foreground">{r.trigger}</span>
                         <span className="truncate text-[11px] text-muted-foreground">{formatDateTime(r.started_at)}</span>
                         <span className="ms-auto shrink-0 text-[11px] font-semibold">{t("{n} new", { n: r.jobs_found })}</span>

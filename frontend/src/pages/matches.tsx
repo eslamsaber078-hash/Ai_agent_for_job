@@ -28,7 +28,7 @@ const SCORE_OPTIONS = [
 
 export function MatchesPage() {
   const { toast } = useToast();
-  const { t } = useI18n();
+  const { t, tt, lang } = useI18n();
   const [data, setData] = useState<MatchList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +61,7 @@ export function MatchesPage() {
     setLoading(true);
     setError(null);
     api
-      .get<MatchList>(`/api/matches${qs({ min_score: minScore, limit: 100, q })}`)
+      .get<MatchList>(`/api/matches${qs({ min_score: minScore, limit: 100, q, lang })}`)
       .then((d) => { if (my === reqId.current) setData(d); })
       .catch((e) => { if (my === reqId.current) setError(e.message); })
       .finally(() => { if (my === reqId.current) setLoading(false); });
@@ -71,7 +71,7 @@ export function MatchesPage() {
     const timer = setTimeout(load, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minScore, q]);
+  }, [minScore, q, lang]);
 
   if (error && !data) {
     return (
@@ -191,7 +191,7 @@ export function MatchesPage() {
                   )}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {m.job?.company} · {m.job?.location} {m.job?.remote ? `· ${t("Remote")}` : ""} · {m.job?.experience_level || t("level n/a")} · {formatSalary(m.job ?? { salary_min: null, salary_max: null, salary_currency: null })} · {postedLabel(m.job ?? { posted_date: null })}
+                  {m.job?.company} · {m.job?.location} {m.job?.remote ? `· ${t("Remote")}` : ""} · {tt(m.job?.experience_level ?? "") || t("level n/a")} · {formatSalary(m.job ?? { salary_min: null, salary_max: null, salary_currency: null })} · {postedLabel(m.job ?? { posted_date: null })}
                 </p>
                 <div className="mt-3 max-w-[260px]">
                   <ScoreBar value={m.score} />

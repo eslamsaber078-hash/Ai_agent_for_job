@@ -12,6 +12,21 @@ const CHANNEL_LABEL: Record<string, string> = {
   unknown: "Not stated",
 };
 
+/**
+ * Our own pipeline wrote the note for most ads; those exact templates get translated.
+ * A note scraped from somewhere else is shown as the source wrote it.
+ */
+function applyNoteText(note: string, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  // The board-less sentinel reads like the board template ("Apply on the board page — …"),
+  // so it must be matched whole or the words "the board page" leak into the Arabic line.
+  if (note === "Apply on the board page — the ad gives no other address") return t(note);
+  let m = note.match(/^The ad asks for the CV at (.+)$/);
+  if (m) return t("The ad asks for the CV at {email}", { email: m[1] });
+  m = note.match(/^Apply on (.+) — the ad gives no other address$/);
+  if (m) return t("Apply on {board} — the ad gives no other address", { board: m[1] });
+  return t(note);
+}
+
 /** A badge naming the route this ad asked for — never a guess. */
 export function ApplyRouteTag({ job }: { job: Job }) {
   const { t } = useI18n();
@@ -63,7 +78,7 @@ export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string })
         </p>
         <ApplyRouteTag job={job} />
       </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{job.apply_note}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{applyNoteText(job.apply_note, t)}</p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {job.apply_channel === "email" && mailHref && (

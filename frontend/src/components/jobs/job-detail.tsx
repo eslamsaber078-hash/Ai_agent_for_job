@@ -13,6 +13,7 @@ import { type Job, type MatchResult, type PreparedApplication, boardLabel, sourc
 import { api, qs } from "@/lib/api";
 import { formatDate, formatSalary, plainDescription, postedLabel, scoreColor } from "@/lib/format";
 import { fileName, saveBlob } from "@/lib/download";
+import { employmentTypeLabel } from "@/lib/employment-type";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -35,7 +36,7 @@ export function JobDetailDialog({
   onChanged?: (job: Job) => void;
 }) {
   const { toast } = useToast();
-  const { t } = useI18n();
+  const { t, tt, lang } = useI18n();
   const navigate = useNavigate();
   const [match, setMatch] = useState<MatchResult | null>(null);
   const [matchError, setMatchError] = useState(false);
@@ -51,7 +52,7 @@ export function JobDetailDialog({
     // Opening another job must not let the previous response land on top of it.
     let current = true;
     api
-      .get<MatchResult>(`/api/matches/${job.id}`)
+      .get<MatchResult>(`/api/matches/${job.id}${qs({ lang })}`)
       .then((d) => { if (current) setMatch(d); })
       .catch(() => {
         if (!current) return;
@@ -61,7 +62,7 @@ export function JobDetailDialog({
     return () => { current = false; };
     // Keyed on the id, not the object: saving a job hands back a new object for the
     // same ad, and refetching there would blank the score the moment it appeared.
-  }, [job?.id]);
+  }, [job?.id, lang]);
 
   if (!job) return null;
 
@@ -131,8 +132,8 @@ export function JobDetailDialog({
         <div className="flex flex-wrap items-center gap-2">
           <SourceBadge job={job} />
           {job.remote && <Badge variant="outline">{t("Remote")}</Badge>}
-          <Badge variant="secondary">{job.employment_type || t("Type not specified")}</Badge>
-          <Badge variant="secondary">{job.experience_level || t("Level not specified")}</Badge>
+          <Badge variant="secondary">{employmentTypeLabel(job.employment_type, t, lang) || t("Type not specified")}</Badge>
+          <Badge variant="secondary">{tt(job.experience_level) || t("Level not specified")}</Badge>
           {!job.is_active && (
             <Badge variant="warning">{t("No longer advertised by {board}", { board: boardLabel(job) })}</Badge>
           )}
