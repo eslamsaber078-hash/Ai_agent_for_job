@@ -734,11 +734,17 @@ def _narrative_ai(job: Job, profile: UserProfile, facts: dict, lang: str = "en")
     return result
 
 
-def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, lang: str = "en") -> dict:
+def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, lang: str = "en",
+                  detail: bool = True) -> dict:
     """Compute a transparent 0-100 match score with a full breakdown.
 
     ``use_ai`` is turned off by list endpoints: the score is deterministic, so
     paying one AI round-trip per job would only slow the page down.
+
+    ``detail=False`` skips the written explanation and factor rows. Ranking a whole
+    account scores thousands of postings to show fifty, and building five paragraphs
+    of prose for each posting nobody will read was most of that wait; the fifty that
+    are actually returned get the full breakdown.
 
     Every factor is scored on what the posting and his profile actually state. A
     posting that says nothing about level, salary or requirements gets no neutral
@@ -785,22 +791,26 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, la
             hard_gap = f"The job title itself asks for {gap_list}, which your CV and skills do not show yet."
     score = max(0, min(100, round(total)))
 
-    factors = [
-        dict(label="Skills", detail=skill_detail, weight=weights["skills"], score=round(skill_score)),
-        dict(label="Experience level", detail=level_detail, weight=weights["level"], score=round(level_score)),
-        dict(label="Location & remote", detail=location_detail, weight=weights["location"], score=round(location_score)),
-        dict(label="Job title fit", detail=title_detail, weight=weights["title"], score=round(title_score)),
-        dict(label="Salary", detail=salary_detail, weight=weights["salary"], score=round(salary_score)),
-    ]
-
-    why = _why_match(job, profile, matched, from_cv, title_hit, level_score, level_label,
-                     location_score, job_tags, lang)
-    concerns = _concerns(job, profile, missing, level_score, level_label, location_score,
-                         location_detail, hard_gap, lang)
-    steps = _next_steps(job, missing, score, profile, lang)
-
+    factors = []
+    why = concerns = ""
+    steps = []
     ai_enhanced = False
-    if use_ai and ai.ai_available():
+    if detail:
+        factors = [
+            dict(label="Skills", detail=skill_detail, weight=weights["skills"], score=round(skill_score)),
+            dict(label="Experience level", detail=level_detail, weight=weights["level"], score=round(level_score)),
+            dict(label="Location & remote", detail=location_detail, weight=weights["location"], score=round(location_score)),
+            dict(label="Job title fit", detail=title_detail, weight=weights["title"], score=round(title_score)),
+            dict(label="Salary", detail=salary_detail, weight=weights["salary"], score=round(salary_score)),
+        ]
+
+        why = _why_match(job, profile, matched, from_cv, title_hit, level_score, level_label,
+                         location_score, job_tags, lang)
+        concerns = _concerns(job, profile, missing, level_score, level_label, location_score,
+                             location_detail, hard_gap, lang)
+        steps = _next_steps(job, missing, score, profile, lang)
+
+    if detail and use_ai and ai.ai_available():
         # Only the model needs his history written out as a payload; a list score must
         # not rebuild it for every one of the thousands of postings it passes through.
         facts = {
@@ -927,7 +937,7 @@ def _concerns(job, profile, missing, level_score, level_label, location_score,
     if location_score < 60:
         # Quoting the scored detail keeps the prose from inventing a second, and usually
         # contradictory, description of the place.
-        parts.append(f"مكان الشغل مش مناسب ليك." if ar else f"Where it is worked: {location_detail}.")
+        parts.append("مكان الشغل مش مناسب ليك." if ar else f"Where it is worked: {location_detail}.")
     if not job.salary_min:
         parts.append("المرتب مش منشور، فمينفعش نتأكد من الحد الأدنى بتاعك." if ar
                      else "No salary published, so your minimum cannot be checked.")

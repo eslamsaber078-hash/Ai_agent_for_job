@@ -1,6 +1,6 @@
 """Relevance-aware discovery: profile-derived phrases, the lenient gate, and the
 employer-site providers added as a second acquisition channel."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from app.database import SessionLocal
 from app.models import Job, JobSource, SearchPreference, Skill, UserProfile, WorkExperience

@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Job, UserProfile
+from ..models import UserProfile
 from ..schemas import MatchResult
-from ..services import compute_match
+from ..services import cache, compute_match
+from ..services.scored import RANK_TTL_SECONDS, decorate, ranked
 from .auth import get_current_profile
-from .deps import get_job_or_404, like
+from .deps import get_job_or_404
 
 router = APIRouter(prefix="/api", tags=["matching"])
 
@@ -28,31 +29,28 @@ def list_matches(
     profile: UserProfile = Depends(get_current_profile),
     lang: str = Query("en", pattern="^(en|ar)$"),
 ):
-    query = db.query(Job).filter(Job.is_active.is_(True), Job.profile_id == profile.id)
-    if q:
-        pattern = like(q)
-        from sqlalchemy import or_
-        query = query.filter(or_(Job.title.ilike(pattern, escape="\\"), Job.company.ilike(pattern, escape="\\")))
-    jobs = query.all()
-    results = []
-    for job in jobs:
-        m = compute_match(job, profile, use_ai=False, lang=lang)
-        if m["score"] >= min_score:
-            m["job"] = dict(
-                id=job.id, title=job.title, company=job.company, location=job.location,
-                country=job.country, remote=job.remote, source=job.source,
-                experience_level=job.experience_level, salary_min=job.salary_min,
-                salary_max=job.salary_max, salary_currency=job.salary_currency,
-                is_demo=job.is_demo, url=job.url,
-                date_kind=job.date_kind,
-                posted_date=job.posted_date.isoformat() if job.posted_date else None,
-                first_seen=job.first_seen.isoformat() if job.first_seen else None,
-            )
-            results.append(m)
-    # Best fit first; inside the same score the freshest posting wins.
-    results.sort(key=lambda r: (r["score"], r["job"]["posted_date"] or ""), reverse=True)
+    # The whole account is ranked once and cached; a page turn only rewrites the fifty
+    # rows it returns in full. Building that fifty-row breakdown is the expensive part
+    # of this endpoint, and the page it fills changes only when the owner writes
+    # something — so the built page is kept too. A search box narrows an arbitrary
+    # query, which cache entries would only crowd out, so those run fresh.
     profile_empty = not any([
         profile.skills, profile.experiences, profile.projects,
         profile.desired_titles, profile.summary,
     ])
-    return {"items": results[:limit], "total": len(results), "profile_empty": profile_empty}
+
+    def build():
+        rows = ranked(db, profile, lang)
+        if q:
+            needle = q.lower()
+            rows = [r for r in rows
+                    if needle in (r["job"]["title"] or "").lower()
+                    or needle in (r["job"]["company"] or "").lower()]
+        results = [r for r in rows if r["score"] >= min_score]
+        return {"items": decorate(db, profile, results[:limit], lang),
+                "total": len(results), "profile_empty": profile_empty}
+
+    if q:
+        return build()
+    return cache.cached(profile.id, f"matches:{lang}:{min_score}:{limit}",
+                        RANK_TTL_SECONDS, build)

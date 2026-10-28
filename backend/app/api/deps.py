@@ -55,6 +55,25 @@ def job_to_out(db, job: Job) -> JobOut:
     })
 
 
+LIST_SNIPPET_CHARS = 600
+
+
+def with_snippet(out: JobOut, limit: int = LIST_SNIPPET_CHARS) -> JobOut:
+    """The list card clamps the ad to two lines; the full text is fetched on open.
+
+    A page of twenty postings carried ~90 KB of descriptions to render a snippet of
+    each. Cutting the text here keeps the payload to what the card actually draws.
+    """
+    text = out.description or ""
+    if len(text) <= limit:
+        return out
+    cut = text[:limit]
+    space = cut.rfind(" ")
+    if space > limit // 2:
+        cut = cut[:space]
+    return out.model_copy(update={"description": cut})
+
+
 def jobs_to_out(db, jobs: list[Job]) -> list[JobOut]:
     """job_to_out for a whole page: two bulk queries instead of two per job."""
     if not jobs:

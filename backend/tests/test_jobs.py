@@ -2,8 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.database import SessionLocal
 from app.models import Job
-from app.services import run_discovery
-from app.services.providers import BaseProvider, ProviderJob, RemotiveProvider
+from app.services.providers import ProviderJob, RemotiveProvider
 from fixture_jobs import FIXTURE_JOBS
 
 
@@ -1434,3 +1433,18 @@ def test_salary_sort_never_compares_one_currency_against_another(client):
     assert amounts[:4] == [(30000, "EGP"), (9000, "USD"), (3000, "USD"), (1500, "")]
     # A posting that publishes no amount never leads the list.
     assert not any(i["salary_min"] is None for i in items[: len(priced)])
+
+
+def test_list_rows_carry_a_snippet_and_the_detail_carries_the_whole_ad(client):
+    """Twenty full ads were ~90 KB to draw twenty two-line snippets."""
+    with SessionLocal() as db:
+        job = Job(profile_id=1, source="test", external_id="long-ad",
+                  title="Long Ad Tester", company="ACME",
+                  description="sentence about Flutter and Python " * 200)
+        db.add(job)
+        db.commit()
+        job_id = job.id
+    items = client.get("/api/jobs", params={"q": "Long Ad Tester"}).json()["items"]
+    item = next(j for j in items if j["id"] == job_id)
+    assert len(item["description"]) <= 600
+    assert len(client.get(f"/api/jobs/{job_id}").json()["description"]) > 2000

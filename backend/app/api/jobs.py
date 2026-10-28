@@ -10,7 +10,8 @@ from ..database import get_db
 from ..models import AutomationRun, Job, JobSource, SavedJob, UserProfile
 from ..schemas import JobLite, JobPage, JobOut, SavedJobOut
 from ..services import EMPTY_SEARCH_ERROR, REGISTRY, compute_match, run_search_now
-from .deps import get_job_or_404, job_to_out, jobs_to_out, like, resolve_sources
+from ..services import cache
+from .deps import get_job_or_404, job_to_out, jobs_to_out, like, resolve_sources, with_snippet
 from .streaming import stream_run
 from .auth import get_current_profile
 
@@ -71,16 +72,29 @@ def list_jobs(
     if order is not None:
         total = query.count()
         page_jobs = query.order_by(*order).offset((page - 1) * page_size).limit(page_size).all()
-        return JobPage(items=jobs_to_out(db, page_jobs), total=total,
+        return JobPage(items=[with_snippet(o) for o in jobs_to_out(db, page_jobs)], total=total,
                        page=page, page_size=page_size,
                        pages=max(1, (total + page_size - 1) // page_size))
 
     jobs = query.all()
     if skill.strip():
         # Whole-word match: filtering "Java" must not pull in every JavaScript ad.
-        pattern = re.compile(rf"(?<!\w){re.escape(skill.strip())}(?!\w)", re.IGNORECASE)
-        jobs = [j for j in jobs if any(pattern.search(s or "") for s in (j.skills or []))
-                or pattern.search(j.description or "")]
+        needle = skill.strip()
+        folded = needle.lower()
+        pattern = re.compile(rf"(?<!\w){re.escape(needle)}(?!\w)", re.IGNORECASE)
+
+        # Every description is scanned for this filter, so the cheap substring check
+        # runs first: a row that does not even contain the letters cannot contain the
+        # whole word, and most rows miss.
+        def has_skill(job: Job) -> bool:
+            for tag in (job.skills or []):
+                text = tag or ""
+                if folded in text.lower() and pattern.search(text):
+                    return True
+            text = job.description or ""
+            return folded in text.lower() and pattern.search(text) is not None
+
+        jobs = [j for j in jobs if has_skill(j)]
 
     if sort == "date":
         # Newest posting first; a posting with no date sorts last, never first.
@@ -106,13 +120,17 @@ def list_jobs(
     total = len(jobs)
     pages = max(1, (total + page_size - 1) // page_size)
     page_jobs = jobs[(page - 1) * page_size: (page - 1) * page_size + page_size]
-    return JobPage(items=jobs_to_out(db, page_jobs), total=total,
+    return JobPage(items=[with_snippet(o) for o in jobs_to_out(db, page_jobs)], total=total,
                    page=page, page_size=page_size, pages=pages)
 
 
 @router.get("/jobs/filters")
 def job_filters(db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
-    mine = db.query(Job).filter(Job.profile_id == profile.id)
+    return cache.cached(profile.id, "job-filters", 600, lambda: _filter_values(db, profile.id))
+
+
+def _filter_values(db: Session, profile_id: int) -> dict:
+    mine = db.query(Job).filter(Job.profile_id == profile_id)
     levels = sorted({j.experience_level for j in mine.with_entities(Job.experience_level).distinct() if j[0]})
     types = sorted({j.employment_type for j in mine.with_entities(Job.employment_type).distinct() if j[0]})
     sources = sorted({j.source for j in mine.with_entities(Job.source).distinct() if j[0]})

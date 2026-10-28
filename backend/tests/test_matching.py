@@ -1,5 +1,5 @@
 from app.database import SessionLocal
-from app.models import Job, UserProfile
+from app.models import Job
 
 
 def _put_profile(client, payload: dict):

@@ -15,6 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from ..database import SessionLocal
 from ..models import AutomationRun, SearchPreference
+from . import cache
 from .providers import EMPTY_SEARCH_ERROR, effective_terms, run_discovery
 
 log = logging.getLogger("jobhunter.scheduler")
@@ -103,6 +104,9 @@ def run_search_now(db, trigger: str = "manual", sources: list[str] | None = None
                     run = stored
             except Exception:  # noqa: BLE001
                 db.rollback()
+        # New postings are in: any ranking computed before this run is now short a
+        # site's worth of jobs.
+        cache.invalidate(profile_id)
         return run
     finally:
         with _profile_locks_guard:

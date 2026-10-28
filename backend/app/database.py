@@ -1,11 +1,71 @@
-from sqlalchemy import create_engine, inspect, text
+import logging
+
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import DATABASE_URL
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+_IS_SQLITE = DATABASE_URL.startswith("sqlite")
+
+if _IS_SQLITE:
+    # The API runs sync endpoints on a 40-thread pool, so the connection pool has to
+    # cover all of them; anything smaller made simultaneous visitors queue for a
+    # connection while the database itself was idle.
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False, "timeout": 15},
+        pool_size=20, max_overflow=20, pool_timeout=10,
+    )
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_connection, _record):
+        # WAL lets readers keep working while an import writes; NORMAL drops the
+        # per-commit fsync of the rollback journal, which is what a read-mostly app
+        # pays for and never needs. busy_timeout replaces an instant "database is
+        # locked" error with a short wait.
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA cache_size=-8192")
+            cursor.execute("PRAGMA temp_store=MEMORY")
+            cursor.execute("PRAGMA mmap_size=268435456")
+        finally:
+            cursor.close()
+else:
+    # Neon drops idle connections; without a ping the first request after a quiet
+    # spell fails on a dead socket.
+    engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20,
+                           pool_timeout=20, pool_pre_ping=True, pool_recycle=300)
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+def warm_pool(bind=None) -> None:
+    """Open every pool slot once, at startup.
+
+    Connections are otherwise created lazily, inside whatever request first needs
+    one. A traffic spike on a freshly started process therefore creates them all at
+    the same instant, and the SQLite WAL lock serializes those creations into stalls
+    long enough to trip pool_timeout. Paying that cost once during boot keeps the
+    first burst as fast as every later one.
+
+    A hosting database that is still waking up must not turn a nicety into a failed
+    boot: whatever could not be opened is simply opened on first use, as before.
+    """
+    bind = bind if bind is not None else engine
+    held = []
+    try:
+        for _ in range(bind.pool.size()):
+            conn = bind.connect()
+            conn.exec_driver_sql("SELECT 1")
+            held.append(conn)
+    except Exception:  # noqa: BLE001
+        logging.getLogger("jobhunter").warning("Pool warm-up stopped early", exc_info=True)
+    finally:
+        for conn in held:
+            conn.close()
 
 
 class Base(DeclarativeBase):
@@ -80,7 +140,12 @@ INDEXES = [
     ("jobs", "CREATE INDEX IF NOT EXISTS ix_jobs_source ON jobs (source)"),
     ("jobs", "CREATE INDEX IF NOT EXISTS ix_jobs_source_ext ON jobs (source, external_id)"),
     ("jobs", "CREATE INDEX IF NOT EXISTS ix_jobs_profile_id ON jobs (profile_id)"),
+    # Every list query reads one owner's live postings newest-first; the single-column
+    # indexes above made the database walk both and intersect them.
+    ("jobs", "CREATE INDEX IF NOT EXISTS ix_jobs_owner_active_posted "
+             "ON jobs (profile_id, is_active, posted_date)"),
     ("automation_runs", "CREATE INDEX IF NOT EXISTS ix_automation_runs_profile_id ON automation_runs (profile_id)"),
+    ("auth_sessions", "CREATE INDEX IF NOT EXISTS ix_auth_sessions_account ON auth_sessions (account_id)"),
 ]
 
 

@@ -463,7 +463,6 @@ def _summary(job: Job, f: dict) -> str:
 
 
 def _bullets(job: Job, f: dict) -> str:
-    job_tags = [t.lower() for t in job_skill_tags(job)]
     lines = ["Suggested resume bullets (based only on your real entries):", ""]
     used = False
     for e in f["experience"]:
@@ -488,7 +487,7 @@ def _cover_letter(job: Job, f: dict) -> str:
     projects = f["projects"]
     para2 = (f"I have been working as {exp['title']} at {exp['company']} where "
              f"{exp['description'][:200]}" if exp and exp["description"] else
-             (f"I have built practical experience through my projects"
+             ("I have built practical experience through my projects"
               + (": " + ", ".join(p['name'] for p in projects[:2]) if projects else ".")
               if projects else
               "I am at the start of my career and highly motivated to grow in this role."))
@@ -511,7 +510,7 @@ def _email(job: Job, f: dict) -> str:
     skills = ", ".join(s["name"] for s in f["candidate_skills"][:5]) or "[your main skills]"
     return "\n\n".join([
         f"Subject: Application for {job.title} - {name}",
-        f"Dear Hiring Team,",
+        "Dear Hiring Team,",
         f"I am writing to apply for the {job.title} role at {job.company or 'your company'}. "
         f"My background in {skills} matches the requirements of the position, and I would be excited "
         f"to contribute to your team.",
@@ -605,7 +604,6 @@ def _cv(job: Job, f: dict, include_gaps: bool = True) -> str:
         f["links"].get("portfolio")] if x) or "[add your email and links in Resume & Profile]"
     tags = [t.lower() for t in job_skill_tags(job)]
     skills = f["candidate_skills"]
-    evidence_words = _evidence_words(f)
     asked = [s for s in skills if any(_skill_claim(t, s["name"]) for t in tags)]
     rest = [s for s in skills if s not in asked]
 

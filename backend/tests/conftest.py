@@ -18,7 +18,7 @@ from app.api import auth as auth_api  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Account, AuthSession, Job, UserProfile  # noqa: E402
-from app.services import ensure_sources  # noqa: E402
+from app.services import cache, ensure_sources  # noqa: E402
 from fixture_jobs import FIXTURE_JOBS  # noqa: E402
 
 # The fixture owner. Sessions are seeded directly (one scrypt hash computed once)
@@ -40,6 +40,9 @@ def client():
 def reset_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    # The ranking memo outlives a request by design; a fresh database in the next test
+    # must not be answered with the previous test's rankings.
+    cache.clear()
     db = SessionLocal()
     try:
         ensure_sources(db)

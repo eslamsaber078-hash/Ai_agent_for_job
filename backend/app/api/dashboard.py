@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Application, Job, SavedJob, UserProfile
 from ..schemas import STATUSES, DashboardStats, StatusCount
-from ..services import compute_match
+from ..services.scored import ranked
 from .applications import _to_out
 from .auth import get_current_profile
-from .deps import jobs_to_out
+from .deps import jobs_to_out, with_snippet
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -19,40 +20,46 @@ def _owned_applications(db: Session, profile_id: int):
 
 @router.get("/stats", response_model=DashboardStats)
 def stats(db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
-    live = db.query(Job).filter(Job.is_active.is_(True), Job.profile_id == profile.id)
-    total_jobs = live.count()
-    stale_hidden = db.query(Job).filter(Job.is_active.is_(False), Job.profile_id == profile.id).count()
+    # One grouped read for both job totals, one grouped read for every tracker count:
+    # the page used to issue a separate COUNT per number it draws, and on the hosted
+    # database every one of those was a network round-trip of its own.
+    by_active = {bool(active): count for active, count in
+                 db.query(Job.is_active, func.count(Job.id))
+                 .filter(Job.profile_id == profile.id).group_by(Job.is_active).all()}
+    total_jobs = by_active.get(True, 0)
+    stale_hidden = by_active.get(False, 0)
     saved_jobs = db.query(SavedJob).join(Job, SavedJob.job_id == Job.id).filter(Job.profile_id == profile.id).count()
-    applications = _owned_applications(db, profile.id).count()
-    interviews = _owned_applications(db, profile.id).filter(Application.status == "Interview").count()
-    offers = _owned_applications(db, profile.id).filter(Application.status == "Offer").count()
+    status_counts = dict(
+        _owned_applications(db, profile.id)
+        .with_entities(Application.status, func.count(Application.id))
+        .group_by(Application.status).all()
+    )
+    applications = sum(status_counts.values())
+    interviews = status_counts.get("Interview", 0)
+    offers = status_counts.get("Offer", 0)
 
-    breakdown = []
-    for status in STATUSES:
-        count = _owned_applications(db, profile.id).filter(Application.status == status).count()
-        if count:
-            breakdown.append(StatusCount(status=status, count=count))
+    breakdown = [StatusCount(status=status, count=status_counts[status])
+                 for status in STATUSES if status_counts.get(status)]
 
     recent_jobs = (
-        live.order_by(Job.posted_date.desc().nullslast(), Job.id.desc())
+        db.query(Job)
+        .filter(Job.is_active.is_(True), Job.profile_id == profile.id)
+        .order_by(Job.posted_date.desc().nullslast(), Job.id.desc())
         .limit(8)
         .all()
     )
 
     high_match_jobs = 0
     best_matches = []
-    scored = []
-    for job in live.all():
-        m = compute_match(job, profile, use_ai=False)
-        if m["score"] >= 70:
+    rows = ranked(db, profile)
+    for row in rows:
+        if row["score"] >= 70:
             high_match_jobs += 1
-        scored.append((m["score"], job.posted_date.timestamp() if job.posted_date else 0, job, m))
-    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    for score, _recency, job, m in scored[:6]:
+    for row in rows[:6]:
         best_matches.append(dict(
-            job_id=job.id, title=job.title, company=job.company,
-            location=job.location, remote=job.remote, score=score,
-            missing_skills=m["missing_skills"][:5],
+            job_id=row["job_id"], title=row["job"]["title"], company=row["job"]["company"],
+            location=row["job"]["location"], remote=row["job"]["remote"], score=row["score"],
+            missing_skills=row["missing_skills"][:5],
         ))
 
     # Overdue follow-ups come first — they are the ones that need action.
@@ -77,7 +84,7 @@ def stats(db: Session = Depends(get_db), profile: UserProfile = Depends(get_curr
         interviews=interviews,
         offers=offers,
         status_breakdown=breakdown,
-        recent_jobs=[*jobs_to_out(db, recent_jobs)],
+        recent_jobs=[with_snippet(out) for out in jobs_to_out(db, recent_jobs)],
         best_matches=best_matches,
         upcoming_follow_ups=[_to_out(db, a) for a in upcoming],
         profile_complete=profile_complete,
