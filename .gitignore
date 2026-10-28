@@ -15,3 +15,5 @@ __pycache__/
 Thumbs.db
 .env.*
 !.env.example
+# Vite build config, no secrets: sets VITE_API_URL=/ for production builds.
+!.env.production
