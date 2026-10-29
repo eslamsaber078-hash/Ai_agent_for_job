@@ -55,15 +55,29 @@ export function JobDetailDialog({
     if (!job?.id) return;
     // Opening another job must not let the previous response land on top of it.
     let current = true;
-    api
-      .get<MatchResult>(`/api/matches/${job.id}${qs({ lang })}`)
-      .then((d) => { if (current) setMatch(d); })
-      .catch(() => {
-        if (!current) return;
-        setMatch(null);
-        setMatchError(true);
-      });
-    return () => { current = false; };
+    let timer: number | undefined;
+    const id = job.id;
+    // The model's prose is written after the measured answer when it is not cached
+    // yet, so look again shortly instead of making the panel wait on the provider.
+    const load = (left: number, initial: boolean) => {
+      api
+        .get<MatchResult>(`/api/matches/${id}${qs({ lang })}`, { track: initial })
+        .then((d) => {
+          if (!current) return;
+          setMatch(d);
+          if (d.narrative_pending && left > 0) {
+            timer = window.setTimeout(() => load(left - 1, false), 2500);
+          }
+        })
+        .catch(() => {
+          // A failed follow-up keeps the prose already on screen.
+          if (!current || !initial) return;
+          setMatch(null);
+          setMatchError(true);
+        });
+    };
+    load(3, true);
+    return () => { current = false; clearTimeout(timer); };
     // Keyed on the id, not the object: saving a job hands back a new object for the
     // same ad, and refetching there would blank the score the moment it appeared.
   }, [job?.id, lang]);

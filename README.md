@@ -487,9 +487,15 @@ Honest platform notes:
 - **Never point `DATABASE_URL` at SQLite on Render**: the disk is wiped on every deploy.
 - **Render's own free Postgres expires after 30 days** — that is why step 1 uses Neon.
 - **The free web service sleeps after ~15 minutes without visitors**; the first visit wakes
-  it (a cold start of ~30–60 s), and scheduled searches only run while it is awake. A paid
-  instance (~$7/month) stays up continuously — or keep the local copy running as the
-  scheduler.
+  it (a cold start of ~30–60 s). Two things soften that: the frontend waits, retries, and
+  says "waking the server" instead of failing, and `.github/workflows/keep-alive.yml` pings
+  `/api/health` every five minutes so the service never idles long enough to sleep. The
+  workflow needs one repository variable — **Settings → Secrets and variables → Actions →
+  Variables → New repository variable**, name `SITE_URL`, value the service address from the
+  Render dashboard (`https://something.onrender.com`, no trailing slash) — and does nothing
+  until it is set. GitHub pauses scheduled workflows after 60 quiet days; one commit or a
+  manual **Run workflow** turns it back on. A paid instance (~$7/month) stays up without
+  any of this. Scheduled searches still only run while the service is awake.
 - The app has no email verification, so on a public address anyone can register an account;
   accounts are fully isolated from each other (per-account data + scrypt password hashes +
   HttpOnly session cookie + rate-limited login/register), and nothing is auto-sent.

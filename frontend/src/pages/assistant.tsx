@@ -12,7 +12,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { api, qs } from "@/lib/api";
+import { api, AI_TIMEOUT, qs } from "@/lib/api";
 import { GENERATION_KINDS, type GenerationResult, type Job, type JobLite, type PreparedMaterial } from "@/lib/types";
 import { fileName, saveBlob } from "@/lib/download";
 import { MarkedText, suggestedItems } from "@/components/applications/marked-text";
@@ -110,7 +110,7 @@ export function AssistantPage() {
         job_id: forJob,
         kind,
         extra_notes: extraNotes,
-      });
+      }, { timeout: AI_TIMEOUT });
       // The request outlives the panel it was for if he switches job mid-generation.
       if (activeJob.current !== forJob) return;
       setResult(r);

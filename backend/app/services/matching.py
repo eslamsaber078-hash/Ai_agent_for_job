@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 
 from pydantic import BaseModel, ValidationError
 
@@ -686,19 +687,20 @@ class _AIAnalysis(BaseModel):
 # The AI narrative for one job/profile pair: opening the same match panel again
 # must not spend another free-quota call. Failures are cached too, so an
 # exhausted quota does not retry on every view.
-_NARRATIVE_CACHE: dict[tuple[int, str], _AIAnalysis | None] = {}
+_NARRATIVE_CACHE: dict[tuple[int, str, str], _AIAnalysis | None] = {}
+_NARRATIVE_INFLIGHT: set[tuple[int, str, str]] = set()
+_NARRATIVE_LOCK = threading.Lock()
 
 
-def _narrative_ai(job: Job, profile: UserProfile, facts: dict, lang: str = "en") -> _AIAnalysis | None:
-    if not ai.ai_available():
-        return None
+def _narrative_key(job: Job, profile: UserProfile, lang: str) -> tuple[int, str, str]:
     signature = (
         _evidence_text(profile) + "|" + ",".join(sorted(profile.desired_titles or []))
         + "|" + ",".join(sorted(profile.target_levels or []))
     )
-    key = (job.id, signature, lang)
-    if key in _NARRATIVE_CACHE:
-        return _NARRATIVE_CACHE[key]
+    return (job.id, signature, lang)
+
+
+def _narrative_prompt(job: Job, facts: dict, lang: str) -> tuple[str, str]:
     payload = {
         "job_title": job.title,
         "job_company": job.company,
@@ -721,17 +723,48 @@ def _narrative_ai(job: Job, profile: UserProfile, facts: dict, lang: str = "en")
         system += (" اكتب كل النصوص بالعربي المصري. متكتبش أي كلمة إنجليزية زي \"candidate\" "
                    "أو \"skills\" — استخدم «المتقدم» و«مهاراتك» وسمّي الوظيفة والمهارات "
                    "بأسمائها زي ما هي.")
-    data = ai.chat_json(system, json.dumps(payload, ensure_ascii=False))
+    return system, json.dumps(payload, ensure_ascii=False)
+
+
+def _narrative_lookup(key: tuple[int, str, str]) -> tuple[bool, _AIAnalysis | None]:
+    with _NARRATIVE_LOCK:
+        return key in _NARRATIVE_CACHE, _NARRATIVE_CACHE.get(key)
+
+
+def _run_narrative(key: tuple[int, str, str], system: str, user: str) -> None:
+    """The slow half, off the request path: one provider call, then the cache write."""
     result = None
-    if data:
-        try:
-            result = _AIAnalysis(**data)
-        except ValidationError:
-            result = None
-    if len(_NARRATIVE_CACHE) > 16:
-        _NARRATIVE_CACHE.clear()
-    _NARRATIVE_CACHE[key] = result
-    return result
+    try:
+        data = ai.chat_json(system, user)
+        if data:
+            try:
+                result = _AIAnalysis(**data)
+            except ValidationError:
+                result = None
+    except Exception:  # noqa: BLE001
+        log.exception("Narrative generation failed; keeping the measured prose")
+    finally:
+        with _NARRATIVE_LOCK:
+            if len(_NARRATIVE_CACHE) > 16:
+                _NARRATIVE_CACHE.clear()
+            _NARRATIVE_CACHE[key] = result
+            _NARRATIVE_INFLIGHT.discard(key)
+
+
+def _schedule_narrative(key: tuple[int, str, str], system: str, user: str) -> None:
+    """Start the model's version in the background; never make the panel wait for it.
+
+    A free provider that stalls used to hold the request for its whole 20 s timeout,
+    while the measured breakdown was ready in milliseconds and the model only
+    rewrites the prose. One worker per answer: a second view while it runs joins the
+    first instead of spending another quota call.
+    """
+    with _NARRATIVE_LOCK:
+        if key in _NARRATIVE_CACHE or key in _NARRATIVE_INFLIGHT:
+            return
+        _NARRATIVE_INFLIGHT.add(key)
+    threading.Thread(target=_run_narrative, args=(key, system, user),
+                     name="match-narrative", daemon=True).start()
 
 
 def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, lang: str = "en",
@@ -810,6 +843,7 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, la
                              location_detail, hard_gap, lang)
         steps = _next_steps(job, missing, score, profile, lang)
 
+    narrative_pending = False
     if detail and use_ai and ai.ai_available():
         # Only the model needs his history written out as a payload; a list score must
         # not rebuild it for every one of the thousands of postings it passes through.
@@ -827,7 +861,14 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, la
             "headline_gap": hard_gap,
             "desired_titles": profile.desired_titles,
         }
-        enriched = _narrative_ai(job, profile, facts, lang)
+        # Every field the worker needs is read here, on the request's thread; it must
+        # never touch this session from another thread.
+        key = _narrative_key(job, profile, lang)
+        known, enriched = _narrative_lookup(key)
+        if not known:
+            system, user = _narrative_prompt(job, facts, lang)
+            _schedule_narrative(key, system, user)
+            narrative_pending = True
         if enriched:
             why = enriched.why_match or why
             concerns = enriched.concerns or concerns
@@ -849,6 +890,7 @@ def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, la
         next_steps=steps,
         hard_gap=hard_gap,
         ai_enhanced=ai_enhanced,
+        narrative_pending=narrative_pending,
     )
 
 

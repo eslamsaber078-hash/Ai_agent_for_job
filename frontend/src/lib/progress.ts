@@ -9,9 +9,11 @@ export interface ProgressState {
   task: { done: number; total: number; label: string } | null;
   /** EMA of recent request durations in ms — lets the idle bar pace itself honestly. */
   avgMs: number;
+  /** A request has been waiting long enough that the host is probably waking up. */
+  slow: boolean;
 }
 
-let state: ProgressState = { pending: 0, task: null, avgMs: 400 };
+let state: ProgressState = { pending: 0, task: null, avgMs: 400, slow: false };
 const listeners = new Set<() => void>();
 
 const DURATIONS: number[] = [];
@@ -44,6 +46,29 @@ export function taskStep(label?: string): void {
 function subscribe(fn: () => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+let slowCount = 0;
+
+function shiftSlow(delta: number): void {
+  slowCount = Math.max(0, slowCount + delta);
+  state = { ...state, slow: slowCount > 0 };
+  for (const l of listeners) l();
+}
+
+/** Watch one request for the length that means "the free host is waking", so the
+ *  screen can say that instead of looking frozen. Call the returned function when
+ *  the request settles, whatever happened to it. */
+export function watchSlowness(afterMs = 4000): () => void {
+  let counting = false;
+  const timer = window.setTimeout(() => {
+    counting = true;
+    shiftSlow(1);
+  }, afterMs);
+  return () => {
+    window.clearTimeout(timer);
+    if (counting) shiftSlow(-1);
+  };
 }
 
 const getSnapshot = () => state;

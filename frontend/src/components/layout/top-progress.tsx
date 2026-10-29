@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/context/i18n";
 import { useProgress } from "@/lib/progress";
 
 /** The thin bar under the window's top edge, plus a floating percentage pill.
@@ -9,7 +10,8 @@ import { useProgress } from "@/lib/progress";
  *  backend makes a slow bar and a fast one finishes instantly — it never invents a
  *  fake byte count. */
 export function TopProgress() {
-  const { pending, task, avgMs } = useProgress();
+  const { pending, task, avgMs, slow } = useProgress();
+  const { t } = useI18n();
   const busy = pending > 0 || task !== null;
   const [pct, setPct] = useState(0);
   const [shown, setShown] = useState(false);
@@ -75,7 +77,7 @@ export function TopProgress() {
 
   if (!shown) return null;
 
-  const label = task ? `${task.label} ${task.done}/${task.total}` : "Loading";
+  const label = task ? `${task.label} ${task.done}/${task.total}` : slow ? t("Waking the server") : t("Loading");
 
   return (
     <>

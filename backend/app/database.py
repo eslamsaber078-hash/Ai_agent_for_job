@@ -35,9 +35,19 @@ if _IS_SQLITE:
             cursor.close()
 else:
     # Neon drops idle connections; without a ping the first request after a quiet
-    # spell fails on a dead socket.
+    # spell fails on a dead socket. The TCP probes do the same job one layer lower:
+    # a NAT or load balancer between the host and the database forgets a quiet
+    # socket before either end does, which is what a "lost connection" mid-session
+    # actually is.
     engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20,
-                           pool_timeout=20, pool_pre_ping=True, pool_recycle=300)
+                           pool_timeout=20, pool_pre_ping=True, pool_recycle=300,
+                           connect_args={
+                               "connect_timeout": 10,
+                               "keepalives": 1,
+                               "keepalives_idle": 30,
+                               "keepalives_interval": 10,
+                               "keepalives_count": 5,
+                           })
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 

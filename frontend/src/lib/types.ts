@@ -219,6 +219,8 @@ export interface MatchResult {
   hard_gap: string;
   next_steps: string[];
   ai_enhanced: boolean;
+  /** The model's prose is still being written in the background. */
+  narrative_pending?: boolean;
   job?: {
     id: number;
     title: string;

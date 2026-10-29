@@ -17,9 +17,14 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.api import auth as auth_api  # noqa: E402
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
+import app.main as app_main  # noqa: E402
 from app.models import Account, AuthSession, Job, UserProfile  # noqa: E402
 from app.services import cache, ensure_sources  # noqa: E402
 from fixture_jobs import FIXTURE_JOBS  # noqa: E402
+
+# The reset_db fixture drops and recreates every table between tests; a housekeeping
+# pass still running from the previous database would write into the next one.
+app_main.STARTUP_HOUSEKEEPING = False
 
 # The fixture owner. Sessions are seeded directly (one scrypt hash computed once)
 # so ordinary API tests do not pay a password verification each time.

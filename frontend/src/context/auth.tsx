@@ -33,6 +33,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [waking, setWaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const requestVersion = useRef(0);
@@ -42,18 +43,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const version = ++requestVersion.current;
     setLoading(true);
     setError(null);
+    setWaking(false);
+    const wakeTimer = window.setTimeout(() => setWaking(true), 3500);
     try {
-      const currentUser = await api.get<AuthUser>("/api/auth/me", { track: false, retries: 0 });
+      // Two retries: the first visit after a quiet spell is answered by a host that
+      // is still booting, and "try again" from him at that moment only wastes time.
+      const currentUser = await api.get<AuthUser>("/api/auth/me", { track: false, retries: 2 });
       if (version === requestVersion.current) setUser(currentUser);
     } catch (err) {
       if (version !== requestVersion.current) return;
       if (err instanceof ApiError && err.status === 401) {
         setUser(null);
       } else {
-        setError("We can't confirm your account right now. Make sure the server is running and the connection is good, then try again.");
+        setError("We can't confirm your account right now. Check your connection, then try again.");
       }
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      window.clearTimeout(wakeTimer);
+      if (version === requestVersion.current) {
+        setLoading(false);
+        setWaking(false);
+      }
     }
   }, []);
 
@@ -119,9 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         <main className="flex min-h-screen items-center justify-center bg-background p-4">
           <section className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-sm" aria-busy={loading}>
             {loading ? (
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                {t("Checking your account…")}
+              <div className="space-y-2" role="status" aria-live="polite">
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                  {waking ? t("Waking the server") : t("Checking your account…")}
+                </div>
+                {waking && (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t("The first visit after a quiet spell starts the server — it can take up to a minute.")}
+                  </p>
+                )}
               </div>
             ) : (
               <>

@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -31,6 +33,10 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("jobhunter")
 
+# The test suite rebuilds the database between cases, so a housekeeping pass that
+# wakes up mid-run would race it; conftest turns this off. Nothing else does.
+STARTUP_HOUSEKEEPING = True
+
 
 def _size_threadpool_for_db() -> None:
     # Endpoints here are sync functions, so each hop through a sync dependency or the
@@ -48,14 +54,21 @@ def _size_threadpool_for_db() -> None:
     limiter.total_tokens = max(limiter.total_tokens, connections * 2)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    _size_threadpool_for_db()
-    Base.metadata.create_all(bind=engine)
-    ensure_schema_upgrades()
-    warm_pool(engine)
+def _startup_housekeeping() -> None:
+    """Maintenance that does not have to finish before the first request.
+
+    Every step here is a round trip to a database that a free host leaves suspended
+    while nobody is using the site, so on a cold start they add up to seconds in which
+    the port is open but nothing is answering. Schema work stays synchronous — a
+    request must never meet a missing column — everything else moves here.
+
+    The pause lets the visit that woke the host finish loading first: these passes
+    write, and a write landing on top of that first page made it measurably slower.
+    """
+    time.sleep(5)
     db = SessionLocal()
     try:
+        warm_pool(engine)
         ensure_sources(db)
         cleaned = merge_duplicate_jobs(db)
         if cleaned:
@@ -63,8 +76,20 @@ async def lifespan(app: FastAPI):
         for pref in db.query(SearchPreference).all():
             hide_stale_jobs(db, pref.max_age_days, profile_id=pref.id)
         start_scheduler(db)
+    except Exception:  # noqa: BLE001
+        # A failed tidy-up must never keep the site offline.
+        log.exception("Startup housekeeping failed; the API keeps serving")
     finally:
         db.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _size_threadpool_for_db()
+    Base.metadata.create_all(bind=engine)
+    ensure_schema_upgrades()
+    if STARTUP_HOUSEKEEPING:
+        threading.Thread(target=_startup_housekeeping, name="startup-housekeeping", daemon=True).start()
     yield
     stop_scheduler()
 

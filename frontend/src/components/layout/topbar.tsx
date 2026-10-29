@@ -26,17 +26,35 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
 
   useEffect(() => {
     let alive = true;
+    let failures = 0;
+    let confirm: number | undefined;
     const check = () => {
       api
         .get<{ status: string }>("/api/health", { track: false, retries: 0 })
-        .then(() => alive && setBackendOk(true))
-        .catch(() => alive && setBackendOk(false));
+        .then(() => {
+          if (!alive) return;
+          failures = 0;
+          setBackendOk(true);
+        })
+        .catch(() => {
+          if (!alive) return;
+          // One missed poll is routine — a sleeping laptop, a Wi-Fi handover, a host
+          // waking from sleep. Re-ask once before calling the backend down, so the
+          // badge does not flash red for a dropped packet.
+          failures += 1;
+          if (failures === 1) {
+            confirm = window.setTimeout(check, 6000);
+            return;
+          }
+          setBackendOk(false);
+        });
     };
     check();
-    const t = setInterval(check, 30000);
+    const poll = setInterval(check, 30000);
     return () => {
       alive = false;
-      clearInterval(t);
+      clearInterval(poll);
+      clearTimeout(confirm);
     };
   }, []);
 

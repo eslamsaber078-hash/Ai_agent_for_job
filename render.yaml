@@ -12,7 +12,14 @@ services:
       pip install -r requirements.txt
       npm install --prefix ../frontend
       npm run build --prefix ../frontend
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # --proxy-headers/--forwarded-allow-ips: Render's proxy terminates HTTPS, so the
+    # app has to read the scheme from the headers or it treats every visitor as
+    # plain HTTP and refuses to set the secure session cookie.
+    # --timeout-keep-alive: uvicorn closes an idle connection after 5s by default.
+    # The proxy pools sockets for longer, so the next request could be sent down a
+    # connection this process had already closed — seen from the browser as a
+    # dropped connection. 75s keeps both ends agreeing.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --timeout-keep-alive 75
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION

@@ -231,6 +231,8 @@ class MatchResult(BaseModel):
     next_steps: list[str] = []
     hard_gap: str = ""
     ai_enhanced: bool = False
+    # The model's prose is being written off the request path; ask again shortly.
+    narrative_pending: bool = False
 
 
 # ---------- Assistant ----------

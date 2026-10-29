@@ -118,13 +118,13 @@ def test_list_endpoints_do_not_call_ai_per_job(client, monkeypatch):
     from app.services import matching as matching_service
 
     monkeypatch.setattr(matching_service.ai, "openai_available", lambda: True)
-    calls: list[int] = []
+    matching_service._NARRATIVE_CACHE.clear()
+    scheduled: list[int] = []
 
-    def fake_narrative(job, profile, facts, lang="en"):
-        calls.append(job.id)
-        return None
+    def fake_schedule(key, system, user):
+        scheduled.append(key[0])
 
-    monkeypatch.setattr(matching_service, "_narrative_ai", fake_narrative)
+    monkeypatch.setattr(matching_service, "_schedule_narrative", fake_schedule)
     client.put("/api/profile", json={
         "full_name": "Ahmed", "summary": "Flutter developer",
         "desired_titles": ["Flutter Developer"],
@@ -137,13 +137,18 @@ def test_list_endpoints_do_not_call_ai_per_job(client, monkeypatch):
         db.close()
 
     assert client.get("/api/matches", params={"limit": 20}).status_code == 200
-    assert calls == []
+    assert scheduled == []
     assert client.get("/api/dashboard/stats").status_code == 200
-    assert calls == []
+    assert scheduled == []
 
     job_id = client.get("/api/jobs", params={"page_size": 1}).json()["items"][0]["id"]
-    client.get(f"/api/matches/{job_id}")
-    assert calls == [job_id]
+    body = client.get(f"/api/matches/{job_id}").json()
+    # The panel gets the measured answer now; the model's prose is written once,
+    # in the background, and a later look finds it.
+    assert scheduled == [job_id]
+    assert body["narrative_pending"] is True
+    assert body["ai_enhanced"] is False
+    assert body["why_match"]
 
 
 def test_saved_jobs_carry_a_match_score(client):

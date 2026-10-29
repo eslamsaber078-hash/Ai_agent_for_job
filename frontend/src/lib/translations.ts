@@ -94,10 +94,22 @@ export const AR: Record<string, string> = {  // topbar
 
   // auth guard screen
   "Checking your account…": "بنطمن على حسابك…",
+  "Waking the server": "السيرفر بيصحى",
+  "The first visit after a quiet spell starts the server — it can take up to a minute.":
+    "أول زيارة بعد فترة سكون بتشغّل السيرفر، وممكن تاخد لحد دقيقة.",
   "Can't reach the server": "الاتصال بالسيرفر مش متاح",
-  "We can't confirm your account right now. Make sure the server is running and the connection is good, then try again.":
-    "مش قادرين نتأكد من حسابك دلوقتي. اتأكد إن السيرفر شغّال والاتصال كويس، وجرّب تاني.",
+  "We can't confirm your account right now. Check your connection, then try again.":
+    "مش قادرين نتأكد من حسابك دلوقتي. اتأكد من اتصالك وجرّب تاني.",
   "Try again": "جرّب تاني",
+
+  // dropped or slow connections
+  Loading: "بيحمّل",
+  "The server took too long to answer. Check your connection and try again.":
+    "السيرفر خد وقت طويل ومردش. اتأكد من اتصالك وجرّب تاني.",
+  "The server is starting up — try again in a moment.":
+    "السيرفر لسه بيقوم — جرّب تاني بعد لحظة.",
+  "The server is busy — try again in a moment.":
+    "السيرفر مشغول — جرّب تاني بعد لحظة.",
 
   // shared states
   "Loading this page": "بنحمّل الصفحة",

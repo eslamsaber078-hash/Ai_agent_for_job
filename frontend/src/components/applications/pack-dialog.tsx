@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Copy, Download, FileDown, FileText, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api, qs } from "@/lib/api";
+import { api, AI_TIMEOUT, qs } from "@/lib/api";
 import { MATERIAL_LABELS, type PreparedApplication, type PreparedMaterial, type Job } from "@/lib/types";
 import { formatDateTime } from "@/lib/format";
 import { fileName, saveBlob } from "@/lib/download";
@@ -62,7 +62,7 @@ export function PackDialog({ pack, onClose, onChanged, onApplied }: {
     const jobId = pack.job.id;
     setBusy(true);
     try {
-      const res = await api.post<PreparedApplication>("/api/applications/prepare", { job_id: jobId });
+      const res = await api.post<PreparedApplication>("/api/applications/prepare", { job_id: jobId }, { timeout: AI_TIMEOUT });
       // He can close this pack and open another one while the write is still running;
       // that response must not land on the new job's dialog.
       if (packRef.current?.job.id !== jobId) return;

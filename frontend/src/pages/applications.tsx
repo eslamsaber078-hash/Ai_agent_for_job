@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, ExternalLink, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api, qs } from "@/lib/api";
+import { api, AI_TIMEOUT, qs } from "@/lib/api";
 import { APP_STATUSES, type Application, type Job, type PreparedApplication } from "@/lib/types";
 import { formatDate, toInputDate } from "@/lib/format";
 import { Button, buttonClassName } from "@/components/ui/button";
@@ -62,7 +62,7 @@ export function ApplicationsPage() {
       const res = await api.post<PreparedApplication>("/api/applications/prepare", {
         job_id: app.job.id,
         notes: app.notes || "",
-      });
+      }, { timeout: AI_TIMEOUT });
       if (my !== packId.current) return;
       setPack({ job: res.application.job, applicationId: res.application.id, materials: res.materials });
       toast(t("Prepared {n} documents for this ad", { n: res.materials.length }));
