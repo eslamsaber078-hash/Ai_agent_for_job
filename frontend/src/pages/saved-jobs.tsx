@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BookmarkX, Bot, Link2, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, qs } from "@/lib/api";
@@ -10,6 +10,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/layout/page-header";
+import { AppliedMark, marksOnApply, useAppliedMark } from "@/components/jobs/applied-mark";
 import { JobDetailDialog } from "@/components/jobs/job-detail";
 import { useToast } from "@/context/toast";
 import { useI18n } from "@/context/i18n";
@@ -48,6 +49,13 @@ export function SavedJobsPage() {
       toast(e.message, "error");
     }
   };
+
+  /** Write the tick's fields into the saved row and the open dialog copy together. */
+  const patchApplied = useCallback((id: number, fields: Partial<Job>) => {
+    setItems((xs) => (xs ?? []).map((x) => (x.job.id === id ? { ...x, job: { ...x.job, ...fields } } : x)));
+    setSelected((cur) => (cur && cur.id === id ? { ...cur, ...fields } : cur));
+  }, []);
+  const setApplied = useAppliedMark(patchApplied);
 
   return (
     <div className="animate-fade-in space-y-5">
@@ -124,9 +132,17 @@ export function SavedJobsPage() {
                   {t("Saved")} {formatDate(s.saved_at)} {s.notes ? `· ${s.notes}` : ""}
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <AppliedMark job={s.job} onToggle={(applied) => setApplied(s.job, applied)} />
                 {s.job.url && (
-                  <Button size="sm" variant="outline" onClick={() => window.open(s.job.url, "_blank", "noopener")}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      window.open(s.job.url, "_blank", "noopener");
+                      if (marksOnApply(s.job)) setApplied(s.job, true);
+                    }}
+                  >
                     <Link2 className="h-4 w-4" /> {t("Apply")}
                   </Button>
                 )}
@@ -142,7 +158,7 @@ export function SavedJobsPage() {
         </div>
       )}
 
-      <JobDetailDialog job={selected} onClose={() => setSelected(null)} onChanged={load} />
+      <JobDetailDialog job={selected} onClose={() => setSelected(null)} onChanged={load} onAppliedChange={setApplied} />
     </div>
   );
 }

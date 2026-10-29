@@ -39,49 +39,60 @@
 @layer base {
   :root {
     color-scheme: light;
-    --background: 40 33% 98%;
-    --foreground: 224 22% 12%;
+    /* A cool porcelain page with pure white cards on top of it. The warmth is gone from
+       the surfaces because it fought the black buttons; what stays warm is the paper
+       tone of the background only. */
+    --background: 220 24% 97%;
+    --foreground: 222 30% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 224 22% 12%;
+    --card-foreground: 222 30% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 22% 12%;
-    --primary: 224 28% 13%;
-    --primary-foreground: 40 33% 98%;
-    --secondary: 40 18% 94%;
-    --secondary-foreground: 224 20% 16%;
-    --muted: 40 18% 94%;
-    --muted-foreground: 220 10% 42%;
-    --accent: 38 24% 91%;
-    --accent-foreground: 224 22% 12%;
-    --destructive: 0 70% 50%;
+    --popover-foreground: 222 30% 12%;
+    --primary: 222 32% 13%;
+    --primary-foreground: 220 24% 98%;
+    --secondary: 220 20% 94%;
+    --secondary-foreground: 222 26% 16%;
+    --muted: 220 22% 95%;
+    --muted-foreground: 222 11% 45%;
+    --accent: 220 22% 93%;
+    --accent-foreground: 222 30% 12%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 36 16% 88%;
-    --input: 36 16% 84%;
-    --ring: 224 28% 13%;
-    --radius: 0.625rem;
+    --border: 220 18% 89%;
+    --input: 220 18% 86%;
+    --ring: 222 32% 13%;
+    --radius: 0.875rem;
+    /* The wash behind every page. Two barely-there lights, so a large empty area is a
+       surface instead of a hole; both sit under the cards and never tint text. */
+    --page-wash:
+      radial-gradient(1100px 520px at 85% -8%, hsl(220 40% 70% / 0.16), transparent 70%),
+      radial-gradient(900px 480px at 8% 0%, hsl(160 30% 60% / 0.10), transparent 65%);
   }
 
   .dark {
     color-scheme: dark;
-    --background: 224 24% 7%;
-    --foreground: 40 20% 96%;
-    --card: 224 20% 10%;
-    --card-foreground: 40 20% 96%;
-    --popover: 224 20% 10%;
-    --popover-foreground: 40 20% 96%;
-    --primary: 40 25% 96%;
-    --primary-foreground: 224 25% 9%;
-    --secondary: 224 15% 16%;
-    --secondary-foreground: 40 20% 96%;
-    --muted: 224 15% 15%;
-    --muted-foreground: 220 11% 64%;
-    --accent: 224 14% 19%;
-    --accent-foreground: 40 20% 98%;
+    --background: 224 27% 6.5%;
+    --foreground: 220 22% 96%;
+    --card: 224 22% 10%;
+    --card-foreground: 220 22% 96%;
+    --popover: 224 22% 11%;
+    --popover-foreground: 220 22% 96%;
+    --primary: 220 25% 96%;
+    --primary-foreground: 224 27% 9%;
+    --secondary: 224 16% 17%;
+    --secondary-foreground: 220 22% 94%;
+    --muted: 224 17% 15%;
+    --muted-foreground: 221 12% 65%;
+    --accent: 224 15% 20%;
+    --accent-foreground: 220 25% 97%;
     --destructive: 0 62% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 224 13% 20%;
-    --input: 224 13% 24%;
-    --ring: 40 25% 90%;
+    --border: 224 14% 20%;
+    --input: 224 14% 24%;
+    --ring: 220 25% 90%;
+    --page-wash:
+      radial-gradient(1100px 520px at 85% -8%, hsl(220 60% 60% / 0.10), transparent 70%),
+      radial-gradient(900px 480px at 8% 0%, hsl(160 45% 45% / 0.07), transparent 65%);
   }
 }
 
@@ -96,21 +107,41 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    /* Latin from Manrope, Arabic from Readex Pro; one flat surface, no coloured glows
-       behind the pages — the cards and their hairlines separate the layers here. */
+    /* Latin from Manrope, Arabic from Readex Pro. One soft wash of light at the top of
+       the page, fixed so it does not scroll away and leave a flat empty band. */
     font-family: "Manrope", "Readex Pro", "Segoe UI", Tahoma, system-ui, -apple-system, sans-serif;
     font-feature-settings: "ss01";
+    line-height: 1.55;
+    background-image: var(--page-wash);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    text-rendering: optimizeLegibility;
   }
 
   [dir="rtl"] {
     font-family: "Readex Pro", "Segoe UI", Tahoma, system-ui, sans-serif;
+    /* Arabic diacritic-free text still needs the extra leading to breathe. */
+    line-height: 1.7;
   }
 
   h1,
   h2,
   h3 {
     @apply tracking-tight;
-    letter-spacing: -0.018em;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+  }
+
+  [dir="rtl"] h1,
+  [dir="rtl"] h2,
+  [dir="rtl"] h3 {
+    letter-spacing: 0;
+  }
+
+  button,
+  a {
+    /* Touch and click feedback should not wait for a repaint on the whole page. */
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Counts, dates and scores line up in columns instead of jittering as the digits
@@ -120,7 +151,7 @@
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.16);
+    background: hsl(var(--foreground) / 0.14);
   }
 
   /* Native controls otherwise render in the operating-system blue. */
@@ -145,8 +176,49 @@
     scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
   }
 
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* A ranking page holds a hundred rows; the browser was laying out and painting all
+     of them to show twenty. Offscreen rows are skipped until he scrolls near them. */
+  .cv-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 132px;
+  }
+
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Lists arrive one after another instead of all 24 cards popping at once. The delay
+     stops at the tenth row so a long page never waits on the animation. */
+  .stagger > * {
+    animation: fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger > :nth-child(1) { animation-delay: 0.01s; }
+  .stagger > :nth-child(2) { animation-delay: 0.04s; }
+  .stagger > :nth-child(3) { animation-delay: 0.07s; }
+  .stagger > :nth-child(4) { animation-delay: 0.10s; }
+  .stagger > :nth-child(5) { animation-delay: 0.13s; }
+  .stagger > :nth-child(6) { animation-delay: 0.16s; }
+  .stagger > :nth-child(7) { animation-delay: 0.19s; }
+  .stagger > :nth-child(8) { animation-delay: 0.22s; }
+  .stagger > :nth-child(9) { animation-delay: 0.25s; }
+  .stagger > :nth-child(n + 10) { animation-delay: 0.28s; }
+
+  /* The lift a card gets when the finger is over it: 2px of travel and one level more
+     light. Only for cards that actually do something. */
+  .hover-lift {
+    transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease,
+      background-color 0.22s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
   }
 
   .surface-grid {
@@ -157,15 +229,41 @@
   }
 }
 
+/* Black shadows disappear on a black page, so the dark theme draws its depth with a
+   top light instead — the same three levels, read the other way round. */
+.dark .shadow-soft {
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.045), 0 2px 8px -3px rgb(0 0 0 / 0.6);
+}
+.dark .shadow-lift {
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 16px 32px -18px rgb(0 0 0 / 0.85);
+}
+.dark .shadow-pop {
+  box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.07), 0 34px 70px -30px rgb(0 0 0 / 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .hover-lift:hover {
+    transform: none;
+  }
+}
+
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.26);
+  background: hsl(var(--muted-foreground) / 0.24);
   border: 3px solid transparent;
   background-clip: content-box;
   border-radius: 9999px;

@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { AR } from "@/lib/translations";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { AR, setTranslateLang, storedLang, type Lang } from "@/lib/translations";
 
-export type Lang = "en" | "ar";
+export type { Lang };
 
 interface I18nCtx {
   lang: Lang;
@@ -13,14 +13,15 @@ interface I18nCtx {
 
 const Ctx = createContext<I18nCtx>({ lang: "en", setLang: () => {}, t: (key) => key, tt: (text) => text });
 
-function initialLang(): Lang {
-  const saved = localStorage.getItem("jobhunter-lang");
-  if (saved === "ar" || saved === "en") return saved;
-  return navigator.language.toLowerCase().startsWith("ar") ? "ar" : "en";
-}
-
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>(initialLang);
+  const [lang, setLangState] = useState<Lang>(storedLang);
+
+  // The text helpers read the language from translations.ts, so it has to be switched
+  // in the same tick as the state — before the next render formats the cards.
+  const setLang = useCallback((next: Lang) => {
+    setTranslateLang(next);
+    setLangState(next);
+  }, []);
 
   useEffect(() => {
     document.documentElement.lang = lang;

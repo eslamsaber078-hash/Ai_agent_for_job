@@ -7,23 +7,30 @@ import { useI18n } from "@/context/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SourceBadge, JobTags } from "./status-badge";
+import { AppliedMark, marksOnApply, type AppliedResult } from "./applied-mark";
 
 export const JobCard = memo(function JobCard({
   job,
   onSave,
   onOpen,
   onTrack,
+  onAppliedChange,
   saving,
+  tracking,
 }: {
   job: Job;
   onSave?: (job: Job) => void;
   onOpen?: (job: Job) => void;
   onTrack?: (job: Job) => void;
+  /** Tick "I applied" on or off; the card shows whatever the server confirmed. */
+  onAppliedChange?: (job: Job, applied: boolean) => AppliedResult;
   saving?: boolean;
+  /** The desk is still being written for this posting — the Track press holds back. */
+  tracking?: boolean;
 }) {
   const { t, tt, lang } = useI18n();
   return (
-    <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card p-5 shadow-soft transition-colors duration-200 hover:border-foreground/25 hover:bg-muted/30">
+    <article className="hover-lift group flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card p-5 shadow-soft hover:border-foreground/25 hover:shadow-lift">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <button
@@ -75,13 +82,23 @@ export const JobCard = memo(function JobCard({
           {t("View details")}
         </Button>
         {job.url && (
-          <Button variant="ghost" size="sm" onClick={() => window.open(job.url, "_blank", "noopener")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              window.open(job.url, "_blank", "noopener");
+              // Opening the ad to apply is the moment he means to be checked off;
+              // a tracked-but-not-applied entry moves up, nothing else changes.
+              if (onAppliedChange && marksOnApply(job)) onAppliedChange(job, true);
+            }}
+          >
             {t("Apply")} <ExternalLink className="h-3 w-3" />
           </Button>
         )}
         <div className="ms-auto flex items-center gap-1.5">
+          {onAppliedChange && <AppliedMark job={job} onToggle={(applied) => onAppliedChange(job, applied)} />}
           {onTrack && !job.application_status && (
-            <Button variant="outline" size="sm" onClick={() => onTrack(job)}>
+            <Button variant="outline" size="sm" disabled={tracking} onClick={() => onTrack(job)}>
               {t("Track")}
             </Button>
           )}

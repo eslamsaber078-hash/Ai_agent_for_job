@@ -146,6 +146,13 @@ INDEXES = [
              "ON jobs (profile_id, is_active, posted_date)"),
     ("automation_runs", "CREATE INDEX IF NOT EXISTS ix_automation_runs_profile_id ON automation_runs (profile_id)"),
     ("auth_sessions", "CREATE INDEX IF NOT EXISTS ix_auth_sessions_account ON auth_sessions (account_id)"),
+    # Every job card, desk row and PDF read asks "which documents belong to this posting
+    # / this application". A foreign key alone does not give Postgres an index to use,
+    # so those lookups were sequential scans over the whole materials table.
+    ("generated_materials", "CREATE INDEX IF NOT EXISTS ix_materials_job "
+                             "ON generated_materials (job_id, kind)"),
+    ("generated_materials", "CREATE INDEX IF NOT EXISTS ix_materials_application "
+                             "ON generated_materials (application_id)"),
 ]
 
 

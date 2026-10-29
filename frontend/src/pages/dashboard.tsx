@@ -12,12 +12,9 @@ import {
   Search,
   UserRound,
 } from "lucide-react";
-import {
-  Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { api } from "@/lib/api";
 import { type DashboardStats } from "@/lib/types";
-import { formatDate, postedLabel, scoreColor } from "@/lib/format";
+import { dateLocale, formatDate, postedLabel, scoreColor } from "@/lib/format";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
@@ -28,7 +25,18 @@ import { useI18n } from "@/context/i18n";
 import { translate } from "@/lib/translations";
 import { cn } from "@/lib/utils";
 
-const STATUS_COLORS = ["#323847", "#434b5d", "#555e73", "#687189", "#7c85a0", "#919ab5", "#a7b0c9", "#bdc5da"];
+// Each bar carries the same colour the desk badge uses for that stage, so the chart
+// and the lists below it read as one system.
+const STATUS_BAR: Record<string, string> = {
+  Discovered: "bg-slate-400",
+  Interested: "bg-primary",
+  Preparing: "bg-amber-400",
+  Applied: "bg-emerald-500",
+  Interview: "bg-sky-500",
+  Offer: "bg-emerald-600",
+  Rejected: "bg-rose-500",
+  Archived: "bg-muted-foreground/45",
+};
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -51,20 +59,22 @@ function StatCard({
   return (
     <Link
       to={to}
-      className="group rounded-xl border border-border/80 bg-card p-4 shadow-soft transition-colors duration-200 hover:border-foreground/25 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="hover-lift group flex flex-col gap-3 rounded-2xl border border-border/60 bg-card p-4 shadow-soft hover:shadow-lift focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </p>
-      <p className="nums mt-2 text-[26px] font-bold leading-none tracking-tight">{value}</p>
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/70 text-muted-foreground transition-colors duration-200 group-hover:bg-primary/10 group-hover:text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span>
+        <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
+        <p className="nums mt-1 text-[26px] font-bold leading-none tracking-tight">{value}</p>
+      </span>
     </Link>
   );
 }
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -99,17 +109,19 @@ export function DashboardPage() {
     );
   }
 
-  const chartData = stats.status_breakdown.map((s, i) => ({
+  const chartData = stats.status_breakdown.map((s) => ({
     name: t(s.status),
     count: s.count,
-    fill: STATUS_COLORS[i % STATUS_COLORS.length],
+    bar: STATUS_BAR[s.status] ?? "bg-primary",
   }));
   // Every status holding the same count used to draw every bar full width, which read
-  // as "100%". A little headroom plus the real number on each bar keeps it honest.
+  // as "100%". The real number is written on the row too, so the length stays honest.
   const chartMax = Math.max(1, ...chartData.map((d) => d.count));
 
-  const firstName = user?.full_name?.trim().split(/\s+/)[0] ?? "there";
-  const today = new Date().toLocaleDateString(document.documentElement.lang === "ar" ? "ar-EG" : "en-GB", { weekday: "long", day: "numeric", month: "long" });
+  // An account with no name written must not be greeted in the other language.
+  const firstName = user?.full_name?.trim().split(/\s+/)[0] ?? "";
+  const hello = firstName ? `${greeting()}${lang === "ar" ? "، " : ", "}${firstName}` : greeting();
+  const today = new Date().toLocaleDateString(dateLocale(), { weekday: "long", day: "numeric", month: "long" });
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -117,7 +129,7 @@ export function DashboardPage() {
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{today}</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-[26px]">
-            {greeting()}, {firstName}
+            {hello}
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {t("Here is your job hunt today — every number comes from your own data.")}
@@ -223,37 +235,20 @@ export function DashboardPage() {
                 {t("No applications tracked yet.")}
               </p>
             ) : (
-              <div style={{ height: chartData.length * 44 + 20 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 24, top: 4, bottom: 4 }}>
-                    <XAxis type="number" hide domain={[0, Math.ceil(chartMax * 1.15)]} />
-                    <YAxis type="category" dataKey="name" width={82} axisLine={false} tickLine={false}
-                           tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip
-                      cursor={{ fill: "hsl(var(--muted) / 0.6)" }}
-                      contentStyle={{
-                        background: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: 12,
-                        fontSize: 12,
-                        color: "hsl(var(--foreground))",
-                        boxShadow: "0 12px 30px -14px rgb(18 20 27 / 0.22)",
-                      }}
-                    />
-                    <Bar dataKey="count" radius={[0, 6, 6, 0]} barSize={16}>
-                      {chartData.map((d, i) => (
-                        <Cell key={i} fill={d.fill} />
-                      ))}
-                      <LabelList
-                        dataKey="count"
-                        position="right"
-                        offset={6}
-                        style={{ fontSize: 11, fontWeight: 600, fill: "hsl(var(--muted-foreground))" }}
+              <ul className="space-y-3">
+                {chartData.map((d) => (
+                  <li key={d.name} className="grid grid-cols-[5.5rem_minmax(0,1fr)_2rem] items-center gap-3">
+                    <span className="truncate text-xs text-muted-foreground" title={d.name}>{d.name}</span>
+                    <span className="relative h-2 overflow-hidden rounded-full bg-muted/80">
+                      <span
+                        className={cn("absolute inset-y-0 start-0 rounded-full transition-[width] duration-500 ease-smooth", d.bar)}
+                        style={{ width: `${Math.max(4, (d.count / chartMax) * 100)}%` }}
                       />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+                    </span>
+                    <span className="text-end text-xs font-semibold tabular-nums text-muted-foreground">{d.count}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>

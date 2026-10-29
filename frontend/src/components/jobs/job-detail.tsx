@@ -21,6 +21,7 @@ import { ScoreBar } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/skeleton";
 import { ApplyRoute } from "@/components/applications/apply-route";
 import { PackDialog, type Pack } from "@/components/applications/pack-dialog";
+import { AppliedMark, marksOnApply, type AppliedResult } from "./applied-mark";
 import { useToast } from "@/context/toast";
 import { useI18n } from "@/context/i18n";
 import { cn } from "@/lib/utils";
@@ -30,10 +31,13 @@ export function JobDetailDialog({
   job,
   onClose,
   onChanged,
+  onAppliedChange,
 }: {
   job: Job | null;
   onClose: () => void;
   onChanged?: (job: Job) => void;
+  /** Tick "I applied" on or off; the page owns the list state, this only reports. */
+  onAppliedChange?: (job: Job, applied: boolean) => AppliedResult;
 }) {
   const { toast } = useToast();
   const { t, tt, lang } = useI18n();
@@ -120,6 +124,16 @@ export function JobDetailDialog({
     }
   };
 
+  /** Opening the ad is applying to it, so the applied tick follows — unless the desk
+   *  entry is already past that stage, where an interview is not something to tick off. */
+  const checkApplied = () => {
+    if (onAppliedChange && marksOnApply(job)) onAppliedChange(job, true);
+  };
+  const openAd = () => {
+    window.open(job.url, "_blank", "noopener");
+    checkApplied();
+  };
+
   return (
     <Dialog
       open={!!job}
@@ -131,6 +145,7 @@ export function JobDetailDialog({
       <div className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <SourceBadge job={job} />
+          {onAppliedChange && <AppliedMark job={job} onToggle={(applied) => onAppliedChange(job, applied)} />}
           {job.remote && <Badge variant="outline">{t("Remote")}</Badge>}
           <Badge variant="secondary">{employmentTypeLabel(job.employment_type, t, lang) || t("Type not specified")}</Badge>
           <Badge variant="secondary">{tt(job.experience_level) || t("Level not specified")}</Badge>
@@ -207,7 +222,7 @@ export function JobDetailDialog({
           </div>
           {match === null && matchError ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              {t("Match unavailable — the backend could not score this job. Check that it is reachable on port 8000.")}
+              {t("Match unavailable — the server could not score this job. Try again in a moment.")}
             </p>
           ) : match === null ? (
             <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
@@ -253,7 +268,7 @@ export function JobDetailDialog({
           )}
         </section>
 
-        <ApplyRoute job={job} />
+        <ApplyRoute job={job} onApply={checkApplied} />
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-5">
           <Button onClick={prepare} disabled={preparing}>
@@ -264,7 +279,7 @@ export function JobDetailDialog({
             {t("Download CV PDF")}
           </Button>
           {job.url && (
-            <Button variant="outline" onClick={() => window.open(job.url, "_blank", "noopener")}>
+            <Button variant="outline" onClick={openAd}>
               {t("Open this ad")} <ExternalLink className="h-4 w-4" />
             </Button>
           )}
@@ -281,7 +296,7 @@ export function JobDetailDialog({
         </div>
       </div>
 
-      <PackDialog pack={pack} onClose={() => setPack(null)} onChanged={() => onChanged?.(job)} />
+      <PackDialog pack={pack} onClose={() => setPack(null)} onChanged={() => onChanged?.(job)} onApplied={checkApplied} />
     </Dialog>
   );
 }

@@ -115,6 +115,10 @@ export interface Job {
   is_active: boolean;
   saved: boolean;
   application_status: string | null;
+  /** Set once he has applied (or tracked) this posting: the id his desk entry has. */
+  application_id?: number | null;
+  /** Documents already prepared for it — an entry with a pack is not a stray tick. */
+  application_docs?: number;
 }
 
 /** One importable job site, as reported by GET /api/jobs/sources. */

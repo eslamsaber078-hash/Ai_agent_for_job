@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ChevronDown,
   Download,
   ExternalLink,
   Loader2,
@@ -21,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PageHeader } from "@/components/layout/page-header";
 import { JobCard } from "@/components/jobs/job-card";
 import { JobDetailDialog } from "@/components/jobs/job-detail";
+import { useAppliedMark } from "@/components/jobs/applied-mark";
 import { useToast } from "@/context/toast";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +59,10 @@ export function FindJobsPage() {
   const [sitesError, setSitesError] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<{ done: number; total: number; label: string } | null>(null);
+  // The site list is fifteen rows of bookkeeping; the jobs are why he opened this page.
+  // It starts folded so the first screen holds postings, and it unfolds on its own the
+  // moment an import starts so the progress bar is never hidden.
+  const [importOpen, setImportOpen] = useState(false);
   const [importLog, setImportLog] = useState<string[]>([]);
   const [showStale, setShowStale] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -65,6 +71,8 @@ export function FindJobsPage() {
   const [selected, setSelected] = useState<Job | null>(null);
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
   const savingRef = useRef<Set<number>>(new Set());
+  const [trackingIds, setTrackingIds] = useState<Set<number>>(new Set());
+  const trackingRef = useRef<Set<number>>(new Set());
   const reqId = useRef(0);
   const progressThrottle = useRef(0);
 
@@ -211,6 +219,11 @@ export function FindJobsPage() {
   }, [t, toast]);
 
   const track = useCallback(async (job: Job) => {
+    // The desk refuses a second row for the same posting, so a double click used to
+    // answer with a raw English "already exists" toast. One press gets through.
+    if (trackingRef.current.has(job.id)) return;
+    trackingRef.current.add(job.id);
+    setTrackingIds(new Set(trackingRef.current));
     try {
       await api.post("/api/applications", { job_id: job.id, status: "Discovered" });
       toast(t("Added to the Applications Desk"));
@@ -218,8 +231,18 @@ export function FindJobsPage() {
       setSelected((cur) => (cur && cur.id === job.id ? { ...cur, application_status: "Discovered" } : cur));
     } catch (e: any) {
       toast(e.message, "error");
+    } finally {
+      trackingRef.current.delete(job.id);
+      setTrackingIds(new Set(trackingRef.current));
     }
   }, [t, toast]);
+
+  /** Write the tick's three fields into every copy this page holds of that job. */
+  const patchApplied = useCallback((id: number, fields: Partial<Job>) => {
+    setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...fields } : x)));
+    setSelected((cur) => (cur && cur.id === id ? { ...cur, ...fields } : cur));
+  }, []);
+  const setApplied = useAppliedMark(patchApplied);
 
   const openJob = useCallback((job: Job) => setSelected(job), []);
 
@@ -258,6 +281,10 @@ export function FindJobsPage() {
     source && { key: "source", label: sourceLabel(source), clear: () => setSource("") },
     remote && { key: "remote", label: t(remote === "true" ? "Remote only" : "Onsite only"), clear: () => setRemote("") },
   ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
+
+  // Open by press, open while a pull is running, and open right after one so the
+  // import log he just earned is not folded away behind the button that made it.
+  const showImport = importOpen || importing !== null || importLog.length > 0;
 
   return (
     <div className="animate-fade-in space-y-5">
@@ -300,17 +327,31 @@ export function FindJobsPage() {
 
       <Card>
         <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0 pb-4">
-          <div className="space-y-1.5">
+          <div className="min-w-0 space-y-1.5">
             <CardTitle>{t("Import jobs")}</CardTitle>
             <CardDescription>
-              {t("One site at a time keeps each server light — the number is how many live postings that site has given you so far.")}
+              {showImport
+                ? t("One site at a time keeps each server light — the number is how many live postings that site has given you so far.")
+                : t("{n} sites to pull from — open the list to choose one", { n: sites.length || "…" })}
             </CardDescription>
           </div>
-          <Button size="sm" variant="secondary" disabled={importing !== null} onClick={() => importSite(null)}>
-            <RefreshCw className={cn("h-4 w-4", importing === "all" && "animate-spin")} />
-            {importing === "all" ? t("Importing…") : t("Import all ticked sites")}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button size="sm" variant="secondary" disabled={importing !== null} onClick={() => importSite(null)}>
+              <RefreshCw className={cn("h-4 w-4", importing === "all" && "animate-spin")} />
+              {importing === "all" ? t("Importing…") : t("Import all ticked sites")}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setImportOpen((v) => !v)}
+              aria-expanded={showImport}
+              title={showImport ? t("Fold the site list") : t("Open the site list")}
+              className="rounded-lg border border-border/70 p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronDown className={cn("h-4 w-4 transition-transform duration-200 ease-smooth", showImport && "rotate-180")} />
+            </button>
+          </div>
         </CardHeader>
+        {showImport && (
         <CardContent className="space-y-4">
           <div className="grid gap-x-8 sm:grid-cols-2">
             {sites.map((s) => {
@@ -408,20 +449,15 @@ export function FindJobsPage() {
             </p>
           </details>
         </CardContent>
+        )}
       </Card>
 
       <Card>
         <CardContent className="space-y-4 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold">{t("Filters")}</p>
-            {hasFilters && (
-              <Button variant="ghost" size="sm" onClick={clearAll}>
-                <X className="h-3.5 w-3.5" /> {t("Clear all")}
-              </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Every field is labelled above itself, so the card needs no title row of its
+              own — that line only pushed the jobs another screen further down. */}
+          <h2 className="sr-only">{t("Filters")}</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <label className="sm:col-span-2 block">
               <FilterLabel>{t("Search")}</FilterLabel>
               <Input placeholder={t("Title, company or description…")} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
@@ -485,6 +521,13 @@ export function FindJobsPage() {
                   <X className="h-3 w-3 text-muted-foreground" />
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={clearAll}
+                className="ms-1 text-[11px] font-semibold text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+              >
+                {t("Clear all")}
+              </button>
             </div>
           )}
         </CardContent>
@@ -520,7 +563,9 @@ export function FindJobsPage() {
                 onSave={toggleSave}
                 onOpen={openJob}
                 onTrack={track}
+                onAppliedChange={setApplied}
                 saving={savingIds.has(job.id)}
+                tracking={trackingIds.has(job.id)}
               />
             ))}
           </div>
@@ -551,6 +596,7 @@ export function FindJobsPage() {
         job={selected}
         onClose={() => setSelected(null)}
         onChanged={refreshJob}
+        onAppliedChange={setApplied}
       />
     </div>
   );

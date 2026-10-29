@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Tabs } from "@/components/ui/tabs";
 import { ApplyRoute } from "./apply-route";
+import { marksOnApply } from "@/components/jobs/applied-mark";
 import { MarkedText, suggestedItems } from "./marked-text";
 import { useToast } from "@/context/toast";
 import { useI18n } from "@/context/i18n";
@@ -21,10 +22,12 @@ export interface Pack {
 }
 
 /** The documents one click prepared for this ad, with the route the ad named. */
-export function PackDialog({ pack, onClose, onChanged }: {
+export function PackDialog({ pack, onClose, onChanged, onApplied }: {
   pack: Pack | null;
   onClose: () => void;
   onChanged: () => void;
+  /** He opened the ad from inside this pack, so the posting gets checked off. */
+  onApplied?: (job: Job) => void;
 }) {
   const { toast } = useToast();
   const { t } = useI18n();
@@ -36,7 +39,14 @@ export function PackDialog({ pack, onClose, onChanged }: {
 
   useEffect(() => {
     packRef.current = pack;
-    if (!pack) return;
+    if (!pack) {
+      // A rebuild or a PDF that was still running when he shut the dialog would
+      // otherwise leave its guard set, and the next pack would open with a button
+      // spinning forever.
+      setBusy(false);
+      setSavingPdf(null);
+      return;
+    }
     setMaterials(pack.materials);
     const order = ["cv", "cover_letter", "email", "questions", "keywords"];
     const first = order.find((k) => pack.materials.some((m) => m.kind === k)) ?? pack.materials[0]?.kind ?? "cv";
@@ -110,7 +120,14 @@ export function PackDialog({ pack, onClose, onChanged }: {
       description={`${pack.job.company} · ${pack.job.location}`}
     >
       <div className="space-y-5">
-        <ApplyRoute job={pack.job} emailBody={materials.find((m) => m.kind === "email")?.content} />
+        <ApplyRoute
+          job={pack.job}
+          emailBody={materials.find((m) => m.kind === "email")?.content}
+          // Opening the ad from the pack is the same act as opening it from the card,
+          // so it checks the posting off the same way — and only while the stage is
+          // still his to change.
+          onApply={() => { if (marksOnApply(pack.job)) onApplied?.(pack.job); }}
+        />
 
         {materials.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/80 px-6 py-10 text-center">

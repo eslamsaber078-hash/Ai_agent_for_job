@@ -1,13 +1,14 @@
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import config
 from ..database import get_db
-from ..models import AutomationRun, Job, JobSource, SavedJob, UserProfile
+from ..models import Application, AutomationRun, GeneratedMaterial, Job, JobSource, SavedJob, UserProfile
 from ..schemas import JobLite, JobPage, JobOut, SavedJobOut
 from ..services import EMPTY_SEARCH_ERROR, REGISTRY, compute_match, run_search_now
 from ..services import cache
@@ -269,6 +270,64 @@ def unsave_job(job_id: int, db: Session = Depends(get_db), profile: UserProfile 
         db.delete(saved)
         db.commit()
     return {"saved": False}
+
+
+# The desk stages that mean "this one is still ahead of me", so marking the ad as
+# applied can move them forward but never moves a live interview or an offer back.
+_PRE_APPLY_STATUSES = ("Discovered", "Interested", "Preparing")
+# Stages an applied mark may be taken back from. Interview and beyond are a record of
+# what already happened, not a tick he can undo here.
+_UNMARKABLE_STATUSES = ("Discovered", "Interested", "Preparing", "Applied")
+
+
+@router.post("/jobs/{job_id}/applied", response_model=JobOut)
+def mark_applied(job_id: int, db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
+    """He pressed the ad's apply route, so the posting is checked off.
+
+    Nothing is sent anywhere by this: it only records that he went to the ad himself.
+    A desk entry that already moved past Applied (interview, offer) is left alone.
+    """
+    job = get_job_or_404(db, job_id, profile.id)
+    app = db.query(Application).filter(Application.job_id == job_id).first()
+    if app is None:
+        app = Application(job_id=job_id, status="Applied", date_applied=datetime.now(timezone.utc))
+        db.add(app)
+        try:
+            db.commit()
+        except IntegrityError:
+            # Two cards for the same ad, or a double click: the row exists, the mark stands.
+            db.rollback()
+    elif app.status in _PRE_APPLY_STATUSES:
+        app.status = "Applied"
+        if app.date_applied is None:
+            app.date_applied = datetime.now(timezone.utc)
+        db.commit()
+    return job_to_out(db, job)
+
+
+@router.delete("/jobs/{job_id}/applied", response_model=JobOut)
+def unmark_applied(job_id: int, db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
+    """Take the mark back off — he opened the ad but never actually applied.
+
+    A desk entry with prepared documents is not deleted, it is moved back to
+    Preparing: the mark was the lie, the CV and cover letter are work he kept. Only
+    that one stage is undone here; a row that already reached an interview or an
+    offer is a record of what happened, not a tick to undo.
+    """
+    job = get_job_or_404(db, job_id, profile.id)
+    app = db.query(Application).filter(Application.job_id == job_id).first()
+    if app is not None:
+        docs = (db.query(func.count(GeneratedMaterial.id))
+                .filter(GeneratedMaterial.application_id == app.id).scalar() or 0)
+        if app.status not in _UNMARKABLE_STATUSES:
+            raise HTTPException(status_code=409, detail=f"This application is already at {app.status}")
+        if docs:
+            app.status = "Preparing"
+            app.date_applied = None
+        else:
+            db.delete(app)
+        db.commit()
+    return job_to_out(db, job)
 
 
 @router.get("/saved-jobs", response_model=list[SavedJobOut])

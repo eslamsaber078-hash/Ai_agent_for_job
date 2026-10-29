@@ -1622,6 +1622,16 @@ _RELATIVE_UNIT_DAYS = [
 ]
 
 
+def _day_only(value: datetime) -> datetime:
+    """Land a date on its UTC day.
+
+    A feed that writes "11 days ago" or "today" names a day, never an hour. Kept at the
+    instant we read it, the card would print "Posted 4h ago" for a clock time no source
+    ever stated; floored, the card shows the day it actually claimed.
+    """
+    return value.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _relative_to_date(value) -> datetime | None:
     """Turn a feed's own words — "قبل ١١ يومًا", "3 weeks ago" — into a date.
 
@@ -1635,19 +1645,19 @@ def _relative_to_date(value) -> datetime | None:
     norm = _ARABIC_DIACRITICS.sub("", text).translate(_ARABIC_DIGITS).translate(_ARABIC_LETTERS)
     now = datetime.now(timezone.utc)
     if "اليوم" in norm or "today" in norm or "just posted" in norm:
-        return now
+        return _day_only(now)
     if "امس" in norm or "yesterday" in norm:
-        return now - timedelta(days=1)
+        return _day_only(now - timedelta(days=1))
     hit = re.search(r"(\d+)\s*\+?\s*([^\s.,;+]+)", norm)
     if hit:
         count, unit = int(hit.group(1)), hit.group(2)
         for stem, days in _RELATIVE_UNIT_DAYS:
             if stem in unit:
-                return now - timedelta(days=count * days)
+                return _day_only(now - timedelta(days=count * days))
         return None
     for stem, days in _RELATIVE_UNIT_DAYS:
         if stem in norm:
-            return now - timedelta(days=days)
+            return _day_only(now - timedelta(days=days))
     return None
 
 

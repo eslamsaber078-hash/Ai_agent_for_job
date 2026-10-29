@@ -60,7 +60,7 @@ export function Topbar({ onMenu }: { onMenu: () => void }) {
           "hidden h-8 items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 text-xs font-medium text-muted-foreground sm:inline-flex",
           backendOk === false && "border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-400"
         )}
-        title={backendOk === null ? t("Checking the backend") : backendOk ? t("Backend connected") : t("Backend offline — start it on port 8000")}
+        title={backendOk === null ? t("Checking the backend") : backendOk ? t("Backend connected") : t("Backend offline — check your connection")}
       >
         <span
           className={cn(

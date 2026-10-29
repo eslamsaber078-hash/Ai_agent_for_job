@@ -59,7 +59,7 @@ function mailto(job: Job, body: string): string {
  * The route the ad itself named: an address it wrote, its own careers page, or nothing but
  * the board listing. `emailBody` lets the prepared application text ride inside the mailto.
  */
-export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string }) {
+export function ApplyRoute({ job, emailBody, onApply }: { job: Job; emailBody?: string; onApply?: () => void }) {
   const { toast } = useToast();
   const { t } = useI18n();
   const copy = (text: string, what: string) => {
@@ -84,18 +84,19 @@ export function ApplyRoute({ job, emailBody }: { job: Job; emailBody?: string })
         {job.apply_channel === "email" && mailHref && (
           <a
             href={mailHref}
+            onClick={onApply}
             className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3.5 text-xs font-semibold text-primary-foreground shadow-soft transition-colors hover:bg-primary/90"
           >
             <Mail className="h-3.5 w-3.5" /> {t("Open the mail draft")}
           </a>
         )}
         {job.apply_channel === "company-link" && link && (
-          <Button size="sm" onClick={() => window.open(link, "_blank", "noopener")}>
+          <Button size="sm" onClick={() => { window.open(link, "_blank", "noopener"); onApply?.(); }}>
             <ExternalLink className="h-3.5 w-3.5" /> {t("Open the company page")}
           </Button>
         )}
         {(job.apply_channel === "listing" || job.apply_channel === "unknown") && job.url && (
-          <Button size="sm" onClick={() => window.open(job.url, "_blank", "noopener")}>
+          <Button size="sm" onClick={() => { window.open(job.url, "_blank", "noopener"); onApply?.(); }}>
             <ExternalLink className="h-3.5 w-3.5" /> {t("Apply on {board}", { board: boardLabel(job) })}
           </Button>
         )}

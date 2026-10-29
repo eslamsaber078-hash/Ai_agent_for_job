@@ -266,10 +266,10 @@ export function ProfilePage() {
         min_salary: profile.min_salary, salary_currency: profile.salary_currency,
         languages: profile.languages, target_levels: profile.target_levels,
       })],
-      ["Skills", () => api.put("/api/profile/skills", profile.skills)],
-      ["Work experience", () => api.put("/api/profile/experiences", profile.experiences)],
-      ["Education", () => api.put("/api/profile/education", profile.education)],
-      ["Projects", () => api.put("/api/profile/projects", profile.projects)],
+      [t("Skills"), () => api.put("/api/profile/skills", profile.skills)],
+      [t("Work experience"), () => api.put("/api/profile/experiences", profile.experiences)],
+      [t("Education"), () => api.put("/api/profile/education", profile.education)],
+      [t("Projects"), () => api.put("/api/profile/projects", profile.projects)],
     ];
     setSaving(true);
     for (let i = 0; i < steps.length; i++) {

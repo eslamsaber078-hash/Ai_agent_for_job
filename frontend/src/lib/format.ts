@@ -1,7 +1,17 @@
-import { translate } from "@/lib/translations";
+import { translate, translateLang } from "@/lib/translations";
 
 function isAr(): boolean {
-  return document.documentElement.lang === "ar";
+  return translateLang() === "ar";
+}
+
+/**
+ * Arabic months with the digits the rest of the screen already uses.
+ *
+ * Plain "ar-EG" renders dates as ٢٧ أكتوبر ٢٠٢٦ while salaries, scores and the day
+ * counts next to them are written 27 / 4,800 / 3 — two number systems on one card.
+ */
+export function dateLocale(): string {
+  return isAr() ? "ar-EG-u-nu-latn" : "en-GB";
 }
 
 export function formatSalary(job: { salary_min: number | null; salary_max: number | null; salary_currency: string | null }): string {
@@ -43,7 +53,7 @@ export function formatDate(value: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(isAr() ? "ar-EG" : "en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString(dateLocale(), { day: "2-digit", month: "short", year: "numeric" });
 }
 
 /**
@@ -84,7 +94,7 @@ export function formatDateTime(value: string | null): string {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(isAr() ? "ar-EG" : "en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(dateLocale(), { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 /**

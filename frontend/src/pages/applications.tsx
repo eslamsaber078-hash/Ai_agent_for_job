@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bot, ExternalLink, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, qs } from "@/lib/api";
-import { APP_STATUSES, type Application, type PreparedApplication } from "@/lib/types";
+import { APP_STATUSES, type Application, type Job, type PreparedApplication } from "@/lib/types";
 import { formatDate, toInputDate } from "@/lib/format";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { ConfirmDialog, Dialog } from "@/components/ui/dialog";
@@ -88,8 +88,21 @@ export function ApplicationsPage() {
     }
   };
 
-  const changeStatus = async (app: Application, status: string) => {
-    try {
+  /** Opening the ad from inside the pack counts as applying. The row moves to Applied
+   *  and the pack stays open with the posting's new stage, so nothing he is reading
+   *  vanishes under him. */
+  const markFromPack = (job: Job) => {
+    api
+      .post<Job>(`/api/jobs/${job.id}/applied`)
+      .then((fresh) => {
+        setPack((p) => (p && p.job.id === fresh.id ? { ...p, job: fresh } : p));
+        toast(t("Marked as applied"));
+        load();
+      })
+      .catch((e: any) => toast(e.message, "error"));
+  };
+
+  const changeStatus = async (app: Application, status: string) => {    try {
       await api.patch(`/api/applications/${app.id}`, { status });
       toast(t("Status changed to {status}", { status: t(status) }));
       load();
@@ -307,7 +320,7 @@ export function ApplicationsPage() {
       )}
 
       <EditDialog app={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
-      <PackDialog pack={pack} onClose={() => setPack(null)} onChanged={load} />
+      <PackDialog pack={pack} onClose={() => setPack(null)} onChanged={load} onApplied={markFromPack} />
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}

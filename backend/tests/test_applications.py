@@ -130,3 +130,89 @@ def test_pdf_of_an_unprepared_kind_is_404(client):
     app_id = prepared["application"]["id"]
     assert client.get(f"/api/applications/{app_id}/materials/cv/pdf").status_code == 200
     assert client.get("/api/applications/99999/materials/cv/pdf").status_code == 404
+
+
+def test_pressing_apply_checks_the_posting(client):
+    r = client.post("/api/jobs/1/applied")
+    assert r.status_code == 200, r.text
+    job = r.json()
+    assert job["application_status"] == "Applied"
+    assert job["application_id"]
+    assert job["application_docs"] == 0
+    apps = client.get("/api/applications").json()
+    assert [a["status"] for a in apps] == ["Applied"]
+    assert apps[0]["date_applied"] is not None
+
+
+def test_the_applied_mark_reaches_the_job_list(client):
+    client.post("/api/jobs/1/applied")
+    items = client.get("/api/jobs", params=dict(page_size=50)).json()["items"]
+    assert [j["id"] for j in items if j["application_status"] == "Applied"] == [1]
+
+
+def test_apply_upgrades_a_tracked_job_and_keeps_its_notes(client):
+    client.post("/api/applications", json=dict(job_id=2, status="Discovered", notes="asked for a referral"))
+    assert client.post("/api/jobs/2/applied").json()["application_status"] == "Applied"
+    app = client.get("/api/applications").json()[0]
+    assert app["status"] == "Applied"
+    assert app["notes"] == "asked for a referral"
+    assert app["date_applied"] is not None
+
+
+def test_apply_never_moves_a_live_interview_back(client):
+    client.post("/api/applications", json=dict(job_id=3, status="Interview"))
+    assert client.post("/api/jobs/3/applied").json()["application_status"] == "Interview"
+
+
+def test_pressing_apply_twice_stays_one_entry(client):
+    first = client.post("/api/jobs/4/applied").json()
+    second = client.post("/api/jobs/4/applied").json()
+    assert first["application_id"] == second["application_id"]
+    assert len(client.get("/api/applications").json()) == 1
+
+
+def test_taking_the_mark_off_removes_the_desk_entry(client):
+    client.post("/api/jobs/5/applied")
+    job = client.delete("/api/jobs/5/applied").json()
+    assert job["application_status"] is None
+    assert job["application_id"] is None
+    assert client.get("/api/applications").json() == []
+
+
+def test_taking_the_mark_off_with_nothing_to_take_is_quiet(client):
+    assert client.delete("/api/jobs/6/applied").json()["application_status"] is None
+
+
+def test_taking_the_mark_off_keeps_a_prepared_pack(client):
+    # The tick is his to undo; the five documents are not. A mark in front of a pack
+    # moves the desk entry back to Preparing instead of deleting the work with it.
+    prepared = client.post("/api/applications/prepare", json=dict(job_id=7)).json()
+    app_id = prepared["application"]["id"]
+    client.post("/api/jobs/7/applied")
+    job = client.delete("/api/jobs/7/applied").json()
+    assert job["application_status"] == "Preparing"
+    assert job["application_docs"] == 5
+    assert client.get(f"/api/applications/{app_id}/materials").json().__len__() == 5
+    app = client.get("/api/applications").json()[0]
+    assert app["status"] == "Preparing" and app["date_applied"] is None
+    # and the mark goes straight back on from there
+    assert client.post("/api/jobs/7/applied").json()["application_status"] == "Applied"
+
+
+def test_taking_the_mark_off_refuses_a_stage_beyond_applied(client):
+    client.post("/api/applications", json=dict(job_id=8, status="Interview"))
+    assert client.delete("/api/jobs/8/applied").status_code == 409
+    assert client.get("/api/jobs/8").json()["application_status"] == "Interview"
+
+
+def test_a_pack_does_not_lock_the_mark_behind_it(client):
+    # A pack alone never blocks the tick: only a stage past Applied does.
+    prepared = client.post("/api/applications/prepare", json=dict(job_id=9)).json()
+    client.patch(f"/api/applications/{prepared['application']['id']}", json=dict(status="Interview"))
+    assert client.delete("/api/jobs/9/applied").status_code == 409
+    assert len(client.get(f"/api/applications/{prepared['application']['id']}/materials").json()) == 5
+
+
+def test_marking_an_unknown_job_is_404(client):
+    assert client.post("/api/jobs/99999/applied").status_code == 404
+    assert client.delete("/api/jobs/99999/applied").status_code == 404

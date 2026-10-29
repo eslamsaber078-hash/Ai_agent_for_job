@@ -84,7 +84,7 @@ export function Dialog({ open, onClose, title, description, children, wide }: Di
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-3 sm:p-6 lg:p-8">
-      <div className="fixed inset-0 bg-foreground/35 backdrop-blur-[3px] dark:bg-black/65" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 animate-fade-in bg-foreground/40 backdrop-blur-[6px] dark:bg-black/70" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
         role="dialog"
@@ -93,11 +93,11 @@ export function Dialog({ open, onClose, title, description, children, wide }: Di
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "animate-fade-up relative z-10 my-auto flex max-h-[calc(100vh-1.5rem)] w-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-pop focus:outline-none sm:max-h-[calc(100vh-3rem)]",
+          "animate-scale-in relative z-10 my-auto flex max-h-[calc(100vh-1.5rem)] w-full flex-col overflow-hidden rounded-3xl border border-border/50 bg-card shadow-pop focus:outline-none sm:max-h-[calc(100vh-3rem)]",
           wide ? "max-w-3xl" : "max-w-lg"
         )}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border/70 bg-card/95 p-5 backdrop-blur sm:p-6">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border/60 bg-card/95 p-5 backdrop-blur sm:p-6">
           <div className="min-w-0">
             {title && <h2 id={titleId} className="break-words text-lg font-semibold leading-snug tracking-tight">{title}</h2>}
             {description && <p id={descriptionId} className="mt-1 break-words text-sm text-muted-foreground">{description}</p>}

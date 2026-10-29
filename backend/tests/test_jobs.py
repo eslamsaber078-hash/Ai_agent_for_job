@@ -404,11 +404,39 @@ def test_feed_words_that_only_say_when_are_turned_into_a_real_date():
                        ("3 weeks ago", 21), ("2 months ago", 60)):
         parsed = _relative_to_date(text)
         assert parsed is not None, text
-        assert abs((now - parsed).total_seconds() - days * 86400) < 3600, text
-    assert (_relative_to_date("Today") - now).total_seconds() < 60
+        assert (now - parsed).days == days, text
     assert _relative_to_date("just posted") is not None
     assert _relative_to_date("") is None
     assert _relative_to_date("soon") is None
+
+
+def test_a_day_only_word_never_becomes_an_hour_on_the_card():
+    """The feed named a day, not a clock time, so no time is allowed to reach the row."""
+    from app.services.providers import _relative_to_date
+
+    now = datetime.now(timezone.utc)
+    today = _relative_to_date("Today")
+    assert today.date() == now.date()
+    assert (today.hour, today.minute, today.second) == (0, 0, 0)
+    for text in ("منذ يوم", "yesterday"):
+        yesterday = _relative_to_date(text)
+        assert yesterday.date() == (now - timedelta(days=1)).date(), text
+        assert yesterday.hour == 0, text
+    # The same holds for a counted phrase: "11 days ago" is a day, not a timestamp.
+    assert _relative_to_date("11 days ago").hour == 0
+
+
+def test_a_day_only_word_never_becomes_an_hour_on_the_card():
+    """The feed named a day, not a clock time, so no time is allowed to reach the row."""
+    from app.services.providers import _relative_to_date
+
+    now = datetime.now(timezone.utc)
+    today = _relative_to_date("Today")
+    assert today.date() == now.date()
+    assert (today.hour, today.minute, today.second) == (0, 0, 0)
+    yesterday = _relative_to_date("منذ يوم")
+    assert yesterday.date() == (now - timedelta(days=1)).date()
+    assert yesterday.hour == 0
 
 
 def test_a_crawl_stamped_source_is_labelled_as_listing_not_posting():

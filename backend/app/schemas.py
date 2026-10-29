@@ -144,6 +144,8 @@ class JobOut(BaseModel):
     is_active: bool = True
     saved: bool = False
     application_status: str | None = None
+    application_id: int | None = None
+    application_docs: int = 0
 
 
 class JobLite(BaseModel):

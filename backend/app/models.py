@@ -126,7 +126,11 @@ class Project(Base):
 
 # Feeds whose timestamp is the crawl, not the company: their newest page always reads
 # "today", so the date they send says when the board listed the ad.
-LISTING_STAMP_SOURCES = {"arbeitnow"}
+# Sources whose stamp is when the listing appeared, not when the company published the
+# ad. Himalayas is here for the rows stored before its feed was distrusted: its "pubDate"
+# is generated at feed-build time in 15-second steps, so those dates are ours, not the
+# advertiser's, and calling them "Posted" would claim a freshness the source never said.
+LISTING_STAMP_SOURCES = {"arbeitnow", "himalayas"}
 
 
 class Job(Base):

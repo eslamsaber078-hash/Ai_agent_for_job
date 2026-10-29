@@ -1,4 +1,6 @@
-from ..models import Application, Job, SavedJob, SearchPreference
+from sqlalchemy import func
+
+from ..models import Application, GeneratedMaterial, Job, SavedJob, SearchPreference
 from ..schemas import JobOut
 from ..services.apply_method import apply_method, board_of
 
@@ -46,10 +48,14 @@ def resolve_sources(db, requested: list[str] | None, profile_id: int) -> list[st
 def job_to_out(db, job: Job) -> JobOut:
     saved = db.query(SavedJob).filter(SavedJob.job_id == job.id).first() is not None
     app = db.query(Application).filter(Application.job_id == job.id).first()
+    docs = (db.query(func.count(GeneratedMaterial.id))
+            .filter(GeneratedMaterial.application_id == app.id).scalar() if app else 0)
     out = JobOut.model_validate(job)
     return out.model_copy(update={
         "saved": saved,
         "application_status": app.status if app else None,
+        "application_id": app.id if app else None,
+        "application_docs": docs or 0,
         "publisher": board_of(job),
         **apply_method(job),
     })
@@ -75,19 +81,26 @@ def with_snippet(out: JobOut, limit: int = LIST_SNIPPET_CHARS) -> JobOut:
 
 
 def jobs_to_out(db, jobs: list[Job]) -> list[JobOut]:
-    """job_to_out for a whole page: two bulk queries instead of two per job."""
+    """job_to_out for a whole page: a handful of bulk queries instead of per job."""
     if not jobs:
         return []
     ids = [j.id for j in jobs]
     saved = {s.job_id for s in db.query(SavedJob.job_id).filter(SavedJob.job_id.in_(ids)).all()}
-    app_status = {a.job_id: a.status for a in db.query(Application.job_id, Application.status)
-                  .filter(Application.job_id.in_(ids)).all()}
+    apps = db.query(Application.id, Application.job_id, Application.status) \
+        .filter(Application.job_id.in_(ids)).all()
+    desk = {a.job_id: a for a in apps}
+    docs = dict(db.query(GeneratedMaterial.application_id, func.count(GeneratedMaterial.id))
+                .filter(GeneratedMaterial.application_id.in_([a.id for a in apps]))
+                .group_by(GeneratedMaterial.application_id).all()) if apps else {}
     out = []
     for job in jobs:
         j = JobOut.model_validate(job)
+        app = desk.get(job.id)
         out.append(j.model_copy(update={
             "saved": job.id in saved,
-            "application_status": app_status.get(job.id),
+            "application_status": app.status if app else None,
+            "application_id": app.id if app else None,
+            "application_docs": docs.get(app.id, 0) if app else 0,
             "publisher": board_of(job),
             **apply_method(job),
         }))

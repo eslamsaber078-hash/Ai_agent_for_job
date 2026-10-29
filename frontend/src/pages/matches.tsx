@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Bot, CheckCircle2, ExternalLink, Radar, Sparkles, XCircle } from "lucide-react";
 import { api, qs } from "@/lib/api";
@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/page-header";
 import { JobDetailDialog } from "@/components/jobs/job-detail";
+import { useAppliedMark } from "@/components/jobs/applied-mark";
 import { useToast } from "@/context/toast";
 import { useI18n } from "@/context/i18n";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,13 @@ export function MatchesPage() {
       .then((fresh) => setOpenJob((cur) => (cur && cur.id === fresh.id ? fresh : cur)))
       .catch(() => {});
   };
+
+  // The ranking payload carries no desk state, so a row's apply press only writes the
+  // mark; the tick itself appears when the posting is opened, which reads /api/jobs/{id}.
+  const patchApplied = useCallback((id: number, fields: Partial<Job>) => {
+    setOpenJob((cur) => (cur && cur.id === id ? { ...cur, ...fields } : cur));
+  }, []);
+  const setApplied = useAppliedMark(patchApplied);
 
   const load = () => {
     const my = ++reqId.current;
@@ -168,7 +176,7 @@ export function MatchesPage() {
           {data.items.map((m) => (
             <article
               key={m.job_id}
-              className="group flex flex-col gap-4 rounded-xl border border-border/80 bg-card p-4 shadow-soft transition-colors duration-200 hover:border-foreground/25 hover:bg-muted/30 sm:flex-row sm:p-5"
+              className="cv-row hover-lift group flex flex-col gap-4 rounded-xl border border-border/80 bg-card p-4 shadow-soft hover:border-foreground/25 hover:shadow-lift sm:flex-row sm:p-5"
             >
               <div className="flex shrink-0 items-baseline gap-2 sm:w-[74px] sm:flex-col sm:items-start sm:gap-1">
                 <span className={cn("nums text-[26px] font-bold leading-none tracking-tight", scoreColor(m.score))}>
@@ -210,7 +218,12 @@ export function MatchesPage() {
 
               <div className="flex shrink-0 flex-row gap-2 sm:flex-col sm:items-end">
                 {m.job?.url && (
-                  <Button size="sm" onClick={() => window.open(m.job!.url, "_blank", "noopener")}>
+                  <Button size="sm" onClick={() => {
+                    window.open(m.job!.url, "_blank", "noopener");
+                    // Same deal as the cards: opening the ad is him applying. The row
+                    // shows no tick, the server keeps it for wherever the ad appears.
+                    setApplied({ id: m.job_id }, true);
+                  }}>
                     {t("Apply")} <ExternalLink className="h-3.5 w-3.5" />
                   </Button>
                 )}
@@ -269,7 +282,10 @@ export function MatchesPage() {
             </div>
             <div className="flex flex-wrap gap-2 border-t border-border/70 pt-4">
               {detail.job?.url && (
-                <Button onClick={() => window.open(detail.job!.url, "_blank", "noopener")}>
+                <Button onClick={() => {
+                  window.open(detail.job!.url, "_blank", "noopener");
+                  setApplied({ id: detail.job_id }, true);
+                }}>
                   {t("Apply on {board}", { board: sourceLabel(detail.job.source) })} <ExternalLink className="h-4 w-4" />
                 </Button>
               )}
@@ -281,7 +297,7 @@ export function MatchesPage() {
         )}
       </Dialog>
 
-      <JobDetailDialog job={openJob} onClose={() => setOpenJob(null)} onChanged={refreshOpenJob} />
+      <JobDetailDialog job={openJob} onClose={() => setOpenJob(null)} onChanged={refreshOpenJob} onAppliedChange={setApplied} />
     </div>
   );
 }

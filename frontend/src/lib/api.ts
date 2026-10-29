@@ -1,4 +1,5 @@
 import { setTask, taskStep, track } from "./progress";
+import { translate } from "./translations";
 
 // Trailing slashes are stripped so VITE_API_URL=/ (production, same-origin)
 // joins into /api/... instead of the protocol-relative //api/... .
@@ -6,10 +7,24 @@ const BASE = (import.meta.env.VITE_API_URL ?? `${window.location.protocol}//${wi
 
 export const AUTH_EXPIRED_EVENT = "auth-expired";
 
+/**
+ * A line the server (or this client) wrote, in the language the screen is using.
+ *
+ * Every message that ends up in a toast passes through here. The dictionary keys on the
+ * English text, so a line it knows comes back translated and one it does not — a scraped
+ * error, a validation string — comes back exactly as it was written. Without this, an
+ * Arabic screen answers a failed press in English.
+ */
+export function localize(message: string): string {
+  const stage = /^This application is already at (.+)$/.exec(message);
+  if (stage) return translate("This application is already at {stage}", { stage: translate(stage[1]) });
+  return translate(message);
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
-    super(message);
+    super(localize(message));
     this.status = status;
   }
 }
@@ -32,7 +47,7 @@ async function fetchJson(path: string, options: RequestInit, retries: number): P
       await sleep(1200);
       return fetchJson(path, options, retries - 1);
     }
-    throw new ApiError(0, "Cannot reach the backend. Is it running on port 8000?");
+    throw new ApiError(0, "Cannot reach the server. Check your connection and try again.");
   }
   const endpoint = path.split(/[?#]/)[0].replace(/\/$/, "");
   if (res.status === 401 && !endpoint.startsWith("/api/auth/") && endpoint !== "/api/health") {
@@ -70,7 +85,7 @@ async function request<T>(path: string, options: RequestInit = {}, opts: Request
       res = await fetchJson(path, options, attempts);
     } catch (err) {
       if (err instanceof ApiError) throw err;
-      throw new ApiError(0, "Cannot reach the backend. Is it running on port 8000?");
+      throw new ApiError(0, "Cannot reach the server. Check your connection and try again.");
     }
     if (!res.ok) throw await readError(res);
     return (await res.json()) as T;
@@ -175,7 +190,7 @@ export const api = {
           res = await fetchJson(path, { method: "POST", body: form }, 0);
         } catch (err) {
           if (err instanceof ApiError) throw err;
-          throw new ApiError(0, "Cannot reach the backend. Is it running on port 8000?");
+          throw new ApiError(0, "Cannot reach the server. Check your connection and try again.");
         }
         if (!res.ok) throw await readError(res);
         return (await res.json()) as T;

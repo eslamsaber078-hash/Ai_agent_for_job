@@ -11,7 +11,7 @@ export const AR: Record<string, string> = {  // topbar
   "Backend offline": "السيرفر مش متاح",
   "Checking the backend": "بنشوف السيرفر",
   "Backend connected": "متصلين بالسيرفر",
-  "Backend offline — start it on port 8000": "السيرفر واقف — شغّله على بورت 8000",
+  "Backend offline — check your connection": "السيرفر مش متاح — اتأكد من اتصالك",
   "Open menu": "افتح القايمة",
   "Switch to light mode": "حول للوضع الفاتح",
   "Switch to dark mode": "حول للوضع الداكن",
@@ -108,6 +108,35 @@ export const AR: Record<string, string> = {  // topbar
     "بياناتك المحفوظة سليمة. اعمل Reload علشان تكمّل — ولو فضل يحصل، شغّل السيرفر تاني كمان.",
   Reload: "اعمل Reload",
 
+  // server answers shown as they arrive, so they need an Arabic line too
+  "Cannot reach the server. Check your connection and try again.":
+    "مقدرناش نوصل للسيرفر. اتأكد من اتصالك وجرّب تاني.",
+  "An application for this job already exists": "التقديم على الوظيفة دي مسجّل عندك بالفعل",
+  "Application not found": "التقديم مش موجود",
+  "Job not found": "الوظيفة مش موجودة",
+  "Material not found": "المستند مش موجود",
+  "This document has not been prepared yet": "المستند ده لسه متجهّزش",
+  "Authentication required": "لازم تدخل لحسابك الأول",
+  "Authentication request is too large": "بيانات الدخول أطول من المتاح",
+  "Request origin is not allowed": "العنوان ده مسموحش به",
+  "X-Requested-With: XMLHttpRequest is required": "لازم الطلب ييجي من التطبيق نفسه",
+  "This phone number is already registered": "رقم الموبايل ده مسجّل بالفعل",
+  "Invalid phone or password": "رقم الموبايل أو كلمة السر مش صح",
+  "Too many authentication attempts. Try again later.":
+    "محاولات دخول كتير ورا بعض. استنى شوية وجرّب تاني.",
+  "Upload a resume with readable text first — there is nothing to read.":
+    "ارفع سيرة ذاتية فيها نص مقروء الأول — مفيش حاجة نقراها.",
+  "Skill name cannot be empty": "اسم المهارة مش ممكن يكون فاضي",
+  "Each skill needs a name and an optional level (1-5)":
+    "كل مهارة محتاجة اسم، والدرجة اختيارية (1-5)",
+  "Skill years must be a number between 0 and 60": "لازم عدد سنين المهارة بين 0 و 60",
+  "Expected a JSON object": "لازم البيانات تكون JSON صحيحة",
+  "Internal server error": "حصل خطأ في السيرفر",
+  "Server is busy, retry shortly": "السيرفر مشغول دلوقتي، جرّب بعد شوية",
+  "This application is already at {stage}": "التقديم ده وصل لمرحلة {stage} بالفعل",
+  "An authentication request is already in progress.": "في محاولة دخول شغالة دلوقتي، استنى منها.",
+  "The backend did not confirm logout.": "السيرفر مأكدش تسجيل الخروج.",
+
   // dates & salaries
   "Not disclosed": "مش مذكور",
   "up to": "حتى",
@@ -157,8 +186,8 @@ export const AR: Record<string, string> = {  // topbar
   "Expires {date}": "ينتهي {date}",
   "Not stated": "مش مذكور",
   "AI match estimate": "تقدير المطابقة بالذكاء الاصطناعي",
-  "Match unavailable — the backend could not score this job. Check that it is reachable on port 8000.":
-    "المطابقة مش متاحة — السيرفر مقدرش يقيّم الوظيفة دي. اتأكد إنه شغّال على بورت 8000.",
+  "Match unavailable — the server could not score this job. Try again in a moment.":
+    "المطابقة مش متاحة — السيرفر مقدرش يقيّم الوظيفة دي. جرّب تاني بعد شوية.",
   "Calculating…": "بنحسب…",
   "Estimate based on your profile — not a guarantee.": "تقدير مبني على ملفك — مش ضمانة.",
   "You have": "عندك",
@@ -167,6 +196,13 @@ export const AR: Record<string, string> = {  // topbar
   "Prepare the application pack": "جهّز باك التقديم",
   "Download CV PDF": "نزّل الـCV PDF",
   "Open this ad": "افتح الإعلان ده",
+  "I applied to this": "أني قدّمت على دي",
+  "I have not actually applied yet": "لسه مقدمتش فعليًا",
+  "Marked as applied": "اتحسّبت كمقدّم عليها",
+  "Applied mark removed": "العلامة اتشالت من عليها",
+  "Applied mark removed — the pack stays in your desk": "العلامة اتشالت — والباك يفضل على سطح التقديمات",
+  "Still {stage} in your desk": "لسه {stage} على سطح التقديمات",
+  "This stage comes from your Applications Desk": "دي حالة من سطح التقديمات — غيّرها من هناك",
   "One document in Assistant": "مستند واحد في المساعد",
   Saved: "محفوظة",
   Save: "احفظ",
@@ -242,6 +278,10 @@ export const AR: Record<string, string> = {  // topbar
   "Import jobs": "استورد وظايف",
   "One site at a time keeps each server light — the number is how many live postings that site has given you so far.":
     "موقع واحد في كل مرة عشان السيرفرات تفضل خفيفة — الرقم ده هو كام وظيفة متاحة الموقع ده جابهالك لحد دلوقتي.",
+  "{n} sites to pull from — open the list to choose one":
+    "{n} مواقع نقدر نجيب منها — افتح القايمة عشان تختار واحد",
+  "Open the site list": "افتح قايمة المواقع",
+  "Fold the site list": "اقفل قايمة المواقع",
   "Importing…": "بيستورد…",
   "Import all ticked sites": "استورد كل المواقع المتعلّم عليها",
   "all ticked sources": "كل المصادر المتعلّم عليها",
@@ -780,9 +820,36 @@ export const AR: Record<string, string> = {  // topbar
   "Overdue": "متأخرة",
 };
 
-/** Translation usable outside React (e.g. error boundaries): reads the active lang off <html>. */
+export type Lang = "en" | "ar";
+
+/**
+ * The language the app answers in, kept in a module variable instead of being read
+ * off `<html lang>`.
+ *
+ * The provider writes that attribute in an effect, which runs after the render it
+ * came from — so anything formatting text during the switch would still see the old
+ * language and the card's posting time would stay English in Arabic mode.
+ */
+let current: Lang = storedLang();
+
+export function storedLang(): Lang {
+  const saved = localStorage.getItem("jobhunter-lang");
+  if (saved === "ar" || saved === "en") return saved;
+  return navigator.language.toLowerCase().startsWith("ar") ? "ar" : "en";
+}
+
+export function setTranslateLang(lang: Lang): void {
+  current = lang;
+}
+
+/** The active language for code that cannot use the React context. */
+export function translateLang(): Lang {
+  return current;
+}
+
+/** Translation usable outside React (e.g. error boundaries). */
 export function translate(key: string, vars?: Record<string, string | number>): string {
-  let text = document.documentElement.lang === "ar" ? (AR[key] ?? key) : key;
+  let text = current === "ar" ? (AR[key] ?? key) : key;
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
       text = text.split(`{${name}}`).join(String(value));
