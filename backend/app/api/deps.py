@@ -11,11 +11,19 @@ def like(term: str) -> str:
     return f"%{escaped}%"
 
 
-def resolve_sources(db, requested: list[str] | None, profile_id: int) -> list[str]:
+REGIONS = {"egypt", "worldwide"}
+
+
+def resolve_sources(db, requested: list[str] | None, profile_id: int,
+                    region: str | None = None) -> list[str]:
     """Which sites an import should fetch, or a 422 explaining why it cannot.
 
     An unknown name used to be dropped silently, so a typo looked like a
     successful import that fetched nothing from that site.
+
+    ``region`` is the two-choice import: Egypt jobs or jobs outside Egypt. The sites
+    are picked automatically from each provider's region, so one press never has to
+    fetch every site at once.
     """
     from fastapi import HTTPException
 
@@ -29,6 +37,20 @@ def resolve_sources(db, requested: list[str] | None, profile_id: int) -> list[st
             status_code=422,
             detail=f"Unknown job source(s): {', '.join(unknown)}. Available: {', '.join(sorted(known))}",
         )
+    if region is not None:
+        wanted_region = region.strip().lower()
+        if wanted_region not in REGIONS:
+            raise HTTPException(
+                status_code=422,
+                detail="Unknown region. Choose egypt or worldwide.",
+            )
+        regional = [name for name, cls in REGISTRY.items() if cls.region == wanted_region]
+        if not regional:
+            raise HTTPException(
+                status_code=422,
+                detail="No importable sites are available for this region.",
+            )
+        return regional
     if wanted:
         final = wanted
     else:

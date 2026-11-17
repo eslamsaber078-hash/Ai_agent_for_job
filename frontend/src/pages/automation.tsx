@@ -432,7 +432,7 @@ export function AutomationPage() {
             <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0 pb-4">
               <div className="space-y-1.5">
                 <CardTitle>{t("Job sources")}</CardTitle>
-                <CardDescription>{t("Ticked sites are searched by the schedule and by “Import all ticked sites” in Find Jobs.")}</CardDescription>
+                <CardDescription>{t("Ticked sites are what the schedule searches. In Find Jobs you can import Egypt jobs or jobs outside Egypt in one press.")}</CardDescription>
               </div>
               <Badge variant="secondary">{t("{n} selected", { n: prefs.sources.length })}</Badge>
             </CardHeader>

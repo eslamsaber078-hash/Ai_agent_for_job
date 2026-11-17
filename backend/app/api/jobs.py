@@ -206,14 +206,17 @@ def get_job(job_id: int, db: Session = Depends(get_db), profile: UserProfile = D
 
 
 @router.post("/jobs/refresh")
-def refresh_jobs(sources: list[str] | None = None, db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
+def refresh_jobs(sources: list[str] | None = None, region: str | None = None,
+                 db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
     """Import now. With `sources` the user names one site, so a single site is fetched.
 
-    Without it, the sites ticked in Automation settings are the ones searched.
+    With `region` (egypt / worldwide) every site covering that region is fetched, which
+    is the two-choice import in Find Jobs. Without either, the sites ticked in
+    Automation settings are the ones searched.
     This runs through the same pipeline as the scheduled search, so the import also
     shows up in the run history and a failure becomes a readable message, not a 500.
     """
-    sites = resolve_sources(db, sources, profile.id)
+    sites = resolve_sources(db, sources, profile.id, region=region)
     try:
         run = run_search_now(db, trigger="manual", sources=sites, profile_id=profile.id)
     except RuntimeError as exc:
@@ -228,10 +231,11 @@ def refresh_jobs(sources: list[str] | None = None, db: Session = Depends(get_db)
 
 
 @router.post("/jobs/refresh/stream")
-def refresh_jobs_stream(sources: list[str] | None = None, db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
+def refresh_jobs_stream(sources: list[str] | None = None, region: str | None = None,
+                        db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
     """The same import as /jobs/refresh, but streamed: a progress event arrives after
     each site actually finishes, so the UI can show a real "site x of N" percentage."""
-    sites = resolve_sources(db, sources, profile.id)
+    sites = resolve_sources(db, sources, profile.id, region=region)
 
     def runner(session, run_sites, on_progress):
         run = run_search_now(session, trigger="manual", sources=run_sites,

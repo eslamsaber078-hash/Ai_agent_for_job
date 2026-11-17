@@ -145,6 +145,10 @@ export const AR: Record<string, string> = {  // topbar
   "Expected a JSON object": "يجب أن تكون البيانات على هيئة كائن JSON صحيح",
   "Internal server error": "حدث خطأ داخلي في الخادم",
   "Server is busy, retry shortly": "الخادم مشغول الآن، أعد المحاولة بعد قليل",
+  "The database is unavailable. Retry shortly.": "قاعدة البيانات غير متاحة حاليًا. أعد المحاولة بعد قليل.",
+  "Too many requests. Wait a moment and try again.": "طلبات كثيرة في وقت قصير. انتظر لحظة ثم أعد المحاولة.",
+  "Request body is too large": "حجم البيانات المرسلة أكبر من المسموح.",
+  "A generation is already running. Wait a moment.": "هناك عملية توليد قيد التنفيذ بالفعل. انتظر لحظة.",
   "This application is already at {stage}": "هذا التقديم في مرحلة {stage} بالفعل",
   "An authentication request is already in progress.": "هناك محاولة دخول قيد التنفيذ الآن، انتظر حتى تنتهي.",
   "The backend did not confirm logout.": "لم يؤكد الخادم تسجيل الخروج.",
@@ -290,11 +294,23 @@ export const AR: Record<string, string> = {  // topbar
   "Import jobs": "استيراد الوظائف",
   "One site at a time keeps each server light — the number is how many live postings that site has given you so far.":
     "استيراد موقع واحد في كل مرة يبقي الضغط خفيفًا على كل خادم — والرقم هو عدد الوظائف المتاحة التي وفّرها لك هذا الموقع حتى الآن.",
-  "{n} sites to pull from — open the list to choose one":
-    "{n} مواقع متاحة للاستيراد — افتح القائمة لاختيار واحد منها",
+  "Press a site to import it alone, or a region button to import every site covering that region. The number is how many live postings that site has given you so far.":
+    "اضغط على موقع لاستيراده وحده، أو على زر منطقة لاستيراد جميع المواقع التي تغطيها. والرقم هو عدد الوظائف المتاحة التي وفّرها لك ذلك الموقع حتى الآن.",
+  "{n} sites to pull from — press a region to import it all at once, or open the list to choose a single site":
+    "{n} موقعًا متاحًا للاستيراد — اضغط على منطقة لاستيرادها دفعة واحدة، أو افتح القائمة لاختيار موقع واحد.",
   "Open the site list": "فتح قائمة المواقع",
   "Fold the site list": "إغلاق قائمة المواقع",
   "Importing…": "جارٍ الاستيراد…",
+  "Import Egypt jobs": "استيراد وظائف داخل مصر",
+  "Import jobs outside Egypt": "استيراد وظائف خارج مصر",
+  "Egypt jobs": "وظائف داخل مصر",
+  "jobs outside Egypt": "وظائف خارج مصر",
+  "Searches every source that lists jobs inside Egypt, in one run":
+    "يبحث في كل المصادر التي تعرض وظائف داخل مصر، في عملية واحدة.",
+  "Searches every source that lists jobs outside Egypt, in one run":
+    "يبحث في كل المصادر التي تعرض وظائف خارج مصر، في عملية واحدة.",
+  "No importable sites are available for this region.": "لا توجد مواقع استيراد متاحة لهذه المنطقة.",
+  "Unknown region. Choose egypt or worldwide.": "منطقة غير معروفة. القيم المتاحة: egypt أو worldwide.",
   "Import all ticked sites": "استيراد كل المواقع المحددة",
   "all ticked sources": "كل المصادر المحددة",
   "import only from this site": "استيراد من هذا الموقع فقط",
@@ -574,8 +590,8 @@ export const AR: Record<string, string> = {  // topbar
   "The first location is the one LinkedIn and Google Jobs search. Currently: {where}.":
     "الموقع الأول هو الذي يبحث فيه LinkedIn وGoogle Jobs. حاليًا: {where}.",
   "Job sources": "مصادر الوظائف",
-  "Ticked sites are searched by the schedule and by “Import all ticked sites” in Find Jobs.":
-    "تبحث عملية الجدولة في المواقع المحددة، وكذلك زر «استيراد كل المواقع المحددة» في صفحة البحث عن وظائف.",
+  "Ticked sites are what the schedule searches. In Find Jobs you can import Egypt jobs or jobs outside Egypt in one press.":
+    "المواقع المحددة هي ما يبحث فيه الجدول. وفي صفحة البحث عن وظائف يمكنك استيراد وظائف داخل مصر أو خارجها بضغطة واحدة.",
   "{n} selected": "تم اختيار {n}",
   "no postings yet": "لا إعلانات بعد",
   "To pull one site alone, use its own button in Find Jobs.":

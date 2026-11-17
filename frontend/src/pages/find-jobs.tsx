@@ -3,7 +3,9 @@ import {
   ChevronDown,
   Download,
   ExternalLink,
+  Globe,
   Loader2,
+  MapPin,
   RefreshCw,
   SearchX,
   X,
@@ -154,12 +156,23 @@ export function FindJobsPage() {
     return () => clearTimeout(t);
   }, [load]);
 
-  const importSite = async (name: string | null) => {
-    setImporting(name ?? "all");
+  type ImportTarget = { site: string } | { region: "egypt" | "worldwide" };
+
+  const importSite = async (target: ImportTarget) => {
+    const site = "site" in target ? target.site : null;
+    const region = "region" in target ? target.region : null;
+    // One key per target so each button spins on its own and the other stays disabled.
+    const key = site ?? `region:${region}`;
+    setImporting(key);
     setImportProgress(null);
     setImportLog([]);
     try {
-      const ev = await api.postStream("/api/jobs/refresh/stream", name ? [name] : [], (p) => {
+      // A region import asks the backend for every site covering that region, so one
+      // press never has to fetch every site in the app.
+      const path = region
+        ? `/api/jobs/refresh/stream${qs({ region })}`
+        : "/api/jobs/refresh/stream";
+      const ev = await api.postStream(path, site ? [site] : [], (p) => {
         if (p.type !== "progress") return;
         // An import emits thousands of lines; re-rendering the whole page (and every
         // loaded job card) per line used to make big imports crawl. The progress bar
@@ -174,7 +187,11 @@ export function FindJobsPage() {
         if (line) setImportLog((prev) => [...prev, line]);
       });
       if (ev.type === "done") {
-        const label = name ? sourceLabel(name) : t("all ticked sources");
+        const label = site
+          ? sourceLabel(site)
+          : region === "egypt"
+            ? t("Egypt jobs")
+            : t("jobs outside Egypt");
         toast(
           (ev.jobs_new ?? 0) > 0
             ? ev.jobs_new === 1
@@ -183,13 +200,18 @@ export function FindJobsPage() {
             : t("{label}: nothing new — every live posting is already in your database", { label })
         );
         setImportLog((ev.log ?? "").split("\n"));
-        // Pressing a site button means "show me this site" too: filter the list to it.
-        if ((name ?? "") === source) {
-          await Promise.all([load(), loadSites()]);
+        if (site) {
+          // Pressing a site button means "show me this site" too: filter the list to it.
+          if (site === source) {
+            await Promise.all([load(), loadSites()]);
+          } else {
+            setSource(site);
+            setPage(1);
+            await loadSites();
+          }
         } else {
-          setSource(name ?? "");
-          setPage(1);
-          await loadSites();
+          // A region import leaves the filters alone and just shows what came in.
+          await Promise.all([load(), loadSites()]);
         }
       }
     } catch (e: any) {
@@ -339,14 +361,34 @@ export function FindJobsPage() {
             <CardTitle>{t("Import jobs")}</CardTitle>
             <CardDescription>
               {showImport
-                ? t("One site at a time keeps each server light — the number is how many live postings that site has given you so far.")
-                : t("{n} sites to pull from — open the list to choose one", { n: sites.length || "…" })}
+                ? t("Press a site to import it alone, or a region button to import every site covering that region. The number is how many live postings that site has given you so far.")
+                : t("{n} sites to pull from — press a region to import it all at once, or open the list to choose a single site", { n: sites.length || "…" })}
             </CardDescription>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button size="sm" variant="secondary" disabled={importing !== null} onClick={() => importSite(null)}>
-              <RefreshCw className={cn("h-4 w-4", importing === "all" && "animate-spin")} />
-              {importing === "all" ? t("Importing…") : t("Import all ticked sites")}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={importing !== null}
+              onClick={() => importSite({ region: "egypt" })}
+              title={t("Searches every source that lists jobs inside Egypt, in one run")}
+            >
+              {importing === "region:egypt"
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <MapPin className="h-4 w-4" />}
+              {importing === "region:egypt" ? t("Importing…") : t("Import Egypt jobs")}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={importing !== null}
+              onClick={() => importSite({ region: "worldwide" })}
+              title={t("Searches every source that lists jobs outside Egypt, in one run")}
+            >
+              {importing === "region:worldwide"
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Globe className="h-4 w-4" />}
+              {importing === "region:worldwide" ? t("Importing…") : t("Import jobs outside Egypt")}
             </Button>
             <button
               type="button"
@@ -391,7 +433,7 @@ export function FindJobsPage() {
                           key={s.name}
                           type="button"
                           disabled={importing !== null}
-                          onClick={() => importSite(s.name)}
+                          onClick={() => importSite({ site: s.name })}
                           title={`${sourceLabel(s.name)} — ${t("import only from this site")}`}
                           className={cn(
                             "group flex min-w-0 items-center gap-3 border-b border-border/60 py-2.5 text-start transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
@@ -574,7 +616,18 @@ export function FindJobsPage() {
           icon={SearchX}
           title={t("No jobs found")}
           description={t("Try different filters, or import from one of the sites above to fill your database.")}
-          action={<Button onClick={() => importSite(null)} disabled={importing !== null}>{t("Import jobs now")}</Button>}
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button onClick={() => importSite({ region: "egypt" })} disabled={importing !== null}>
+                <MapPin className="h-4 w-4" />
+                {t("Import Egypt jobs")}
+              </Button>
+              <Button variant="outline" onClick={() => importSite({ region: "worldwide" })} disabled={importing !== null}>
+                <Globe className="h-4 w-4" />
+                {t("Import jobs outside Egypt")}
+              </Button>
+            </div>
+          }
         />
       ) : (
         <>
