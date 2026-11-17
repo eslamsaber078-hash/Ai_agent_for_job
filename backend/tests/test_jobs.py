@@ -598,6 +598,13 @@ def test_sources_endpoint_lists_every_registered_site_with_live_counts(client):
     assert sources["jsearch"]["requires_key"] is True
     assert sources["jooble"]["requires_key"] is True  # silent until its free key is set
     assert sources["adzuna"]["requires_key"] is True  # silent until its free key pair is set
+    # The import list is grouped inside Egypt / outside Egypt on this field.
+    assert sources["linkedin"]["region"] == "egypt"
+    assert sources["talent"]["region"] == "egypt"
+    assert sources["forasna"]["region"] == "egypt"
+    assert sources["tanqeeb"]["region"] == "egypt"
+    assert sources["remotive"]["region"] == "worldwide"
+    assert sources["employers"]["region"] == "worldwide"
 
 
 def test_refresh_searches_with_the_saved_preferences(client, monkeypatch):

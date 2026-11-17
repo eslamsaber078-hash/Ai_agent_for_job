@@ -312,6 +312,9 @@ export const AR: Record<string, string> = {  // topbar
     "مواقع بتنشر وظايف مصر لكن مفيش منها تغذية استيراد",
   "These block automated access, so the app will not pretend to import them. One click opens your own search there:":
     "المواقع دي بتمنع الوصول الآلي، فالتطبيق مش هيدّعي إنه بيستورد منها. ضغطة واحدة تفتح بحثك انت عندهم:",
+  "Inside Egypt": "داخل مصر",
+  "Outside Egypt": "خارج مصر",
+  "{sites} sites · {jobs} live": "{sites} من المواقع · {jobs} وظيفة متاحة",
   "Filters": "فلاتر",
   "Clear all": "امسح الكل",
   "Search": "بحث",

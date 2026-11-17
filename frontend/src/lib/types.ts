@@ -125,6 +125,8 @@ export interface Job {
 export interface JobSourceSite {
   name: string;
   label: string;
+  /** "egypt" posts inside Egypt, "worldwide" posts roles open to remote applicants. */
+  region: "egypt" | "worldwide";
   enabled: boolean;
   requires_key: boolean;
   /** False when the site needs a key that .env does not hold, so it never ran. */
@@ -150,6 +152,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   jooble: "Jooble Egypt",
   adzuna: "Adzuna Egypt",
   employers: "Employer boards (Canonical, Stripe…)",
+  talent: "Talent.com Egypt",
+  forasna: "Forasna (فرصنا)",
+  tanqeeb: "Tanqeeb (تنقيب)",
   jobgether: "Jobgether",
 };
 

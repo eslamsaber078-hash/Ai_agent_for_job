@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
 from typing import Iterable, Iterator
+from urllib.parse import unquote
 
 import httpx
 from sqlalchemy import and_, or_
@@ -54,12 +55,14 @@ AMAZON_SEARCH_API = "https://www.amazon.jobs/en/search.json"
 WORKDAY_BASE = "https://{tenant}.{wd}.myworkdayjobs.com"
 SMARTRECRUITERS_API = "https://api.smartrecruiters.com/v1/companies/{company}/postings"
 JOOBLE_API = "https://jooble.org/api/"
+TALENT_EGYPT_API = "https://eg.talent.com/jobs"
+FORASNA_SEARCH_API = "https://forasna.com/%D9%88%D8%B8%D8%A7%D8%A6%D9%81-%D8%AE%D8%A7%D9%84%D9%8A%D8%A9"
+TANQEEB_SEARCH_API = "https://www.tanqeeb.com/jobs/search"
 EMPLOYER_BOARD_APIS = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{company}/jobs",
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{company}",
 }
 GREENHOUSE_DETAIL_API = "https://boards-api.greenhouse.io/v1/boards/{company}/jobs/{posting_id}"
-JOBGETHER_API = "https://jobgether.com/api/v1/jobs"
 ADZUNA_API = "https://api.adzuna.com/v1/api/jobs/{country}/search/1"
 
 # Free public APIs must not be hammered: one GET per provider per TTL window,
@@ -316,6 +319,9 @@ class ProviderJob:
 class BaseProvider(ABC):
     name = "base"
     label = "Base provider"
+    # Which of the two import groups the site belongs to: "egypt" for postings
+    # inside Egypt, "worldwide" for roles open to remote/relocating applicants.
+    region = "worldwide"
     requires_key = False
     # True when the site offers a keyword search we can aim with his terms;
     # False means the feed hands us everything and filtering is ours to do.
@@ -704,6 +710,7 @@ class LinkedInProvider(BaseProvider):
     """
 
     name = "linkedin"
+    region = "egypt"
     label = "LinkedIn (real jobs, public guest listings)"
     keep_cache_window = True  # it blocks a visitor who keeps reloading the same search
     keyword_search = True
@@ -749,6 +756,7 @@ class JSearchProvider(BaseProvider):
     """
 
     name = "jsearch"
+    region = "egypt"
     fetch_ttl = QUOTA_CAPPED_TTL_SECONDS
     keep_cache_window = True
     label = "Google for Jobs — Egypt (JSearch, key required)"
@@ -903,6 +911,7 @@ class AmazonProvider(BaseProvider):
     """
 
     name = "amazon"
+    region = "egypt"
     label = "Amazon Careers — Egypt (employer site, free)"
     fetch_ttl = FAST_FEED_TTL_SECONDS
     keyword_search = False
@@ -977,6 +986,7 @@ class WorkdayProvider(BaseProvider):
     """
 
     name = "workday"
+    region = "egypt"
     label = "Employer career sites — Egypt (Workday, free)"
     fetch_ttl = FAST_FEED_TTL_SECONDS
     keyword_search = False
@@ -1058,6 +1068,7 @@ class SmartRecruitersProvider(BaseProvider):
     """Employers that publish their own openings through SmartRecruiters (no key)."""
 
     name = "smartrecruiters"
+    region = "egypt"
     label = "Employer career sites — Egypt (SmartRecruiters, free)"
     fetch_ttl = FAST_FEED_TTL_SECONDS
     keyword_search = False
@@ -1270,60 +1281,228 @@ def _salary_range(text: str) -> tuple[int | None, int | None, str | None]:
     return amount(match.group(1)), amount(match.group(2)), currency
 
 
-class JobgetherProvider(BaseProvider):
-    """Jobgether — a worldwide remote-job aggregator with a public JSON feed.
+_TALENT_CARD = re.compile(r'<article class="JobCard_card[^"]*".*?</article>', re.S)
+_TALENT_FIELDS = {
+    "id": re.compile(r'href="/view\?id=(\d+)"'),
+    "title": re.compile(r'class="JobCard_title__\w+"[^>]*>(.*?)</h2>', re.S),
+    "company": re.compile(r'class="JobCard_company__\w+"[^>]*>(.*?)</span>', re.S),
+    "location": re.compile(r'class="JobCard_location__\w+"[^>]*>(.*?)</span>', re.S),
+    "snippet": re.compile(r'class="JobCard_snippet__\w+"[^>]*>(.*?)</p>', re.S),
+    "date": re.compile(r'<time class="JobCard_timeText__\w+"[^>]*dateTime="([^"]+)"'),
+}
 
-    Its listings carry the employer's own country restrictions, so only postings
-    whose location is open to Egypt (Egypt, Worldwide, Anywhere…) are imported.
+
+def _talent_field(name: str, block: str) -> str:
+    match = _TALENT_FIELDS[name].search(block)
+    return _strip_html(unescape(match.group(1))).strip() if match else ""
+
+
+class TalentProvider(BaseProvider):
+    """Talent.com's Egypt index — the site a large share of Egyptian employers feed.
+
+    One public search page per saved phrase returns the cards themselves (title,
+    company, Egypt location, posting date and snippet), so the import costs one
+    request per phrase and never needs a detail page.
     """
 
-    name = "jobgether"
-    label = "Jobgether — remote aggregator (free)"
-    fetch_ttl = FETCH_CACHE_TTL_SECONDS
-    keyword_search = False
-    MAX_PAGES = 2
+    name = "talent"
+    region = "egypt"
+    label = "Talent.com — Egypt (aggregator, free)"
+    fetch_ttl = FAST_FEED_TTL_SECONDS
+    keyword_search = True
+    MAX_JOBS = 60
+    MAX_PHRASES = 3
 
     def fetch(self, titles, skills, locations, remote_only):
         jobs: list[ProviderJob] = []
-        for page in range(1, self.MAX_PAGES + 1):
-            data = _cached_get_json(f"jobgether:{page}", JOBGETHER_API, params={"page": page})
-            if not isinstance(data, dict):
-                break
-            batch = data.get("jobs") or []
-            if not batch:
-                break
-            for item in batch:
-                location = str(item.get("location") or "").strip()
-                remote = str(item.get("remote") or "").strip()
-                combined = f"{remote} {location}".strip()
-                if not (_is_egypt(combined) or _open_remote(combined)):
+        seen: set[str] = set()
+        for phrase in search_terms(titles, skills)[: self.MAX_PHRASES]:
+            html = _cached_get_text(f"talent:{phrase}", TALENT_EGYPT_API,
+                                    params={"k": phrase, "l": "Egypt"}, timeout=30.0)
+            if not html:
+                continue
+            for block in _TALENT_CARD.findall(html):
+                external_id = _talent_field("id", block)
+                title = _talent_field("title", block)[:300]
+                location = _talent_field("location", block)
+                if not external_id or not title or external_id in seen:
                     continue
-                title = _plain_field(item.get("title"))[:300]
-                external_id = str(item.get("id") or "").strip()
-                if not title or not external_id:
+                if not (_is_egypt(location) or _open_remote(location)):
                     continue
-                functions = [_plain_field(f) for f in (item.get("jobFunctions") or [])]
-                functions = [f for f in functions if f][:10]
-                smin, smax, scur = _salary_range(str(item.get("salaryRange") or ""))
+                seen.add(external_id)
                 jobs.append(ProviderJob(
                     source=self.name,
                     external_id=external_id,
                     title=title,
-                    company=_plain_field(item.get("company"))[:200],
+                    company=_talent_field("company", block)[:200],
                     location=location[:300],
-                    country="Egypt" if _is_egypt(combined) else "",
-                    remote=_remote_word(combined),
+                    country="Egypt" if _is_egypt(location) else "",
+                    remote=_remote_word(f"{title} {location}"),
+                    description=_talent_field("snippet", block)[:4000],
+                    url=f"https://eg.talent.com/view?id={external_id}",
+                    posted_date=_parse_date(_talent_field("date", block)),
+                ))
+                if len(jobs) >= self.MAX_JOBS:
+                    return jobs
+        return jobs
+
+
+_FORASNA_BLOCK_FIELDS = {
+    "url": re.compile(r'href="(https://forasna\.com/job/p/[^"]+)"'),
+    "title": re.compile(r'<h2 class="job-title">.*?<span>(.*?)</span>', re.S),
+    "date": re.compile(r'<time[^>]*class="time1 job-date"[^>]*datetime="([^"]+)"'),
+    "location": re.compile(r'class="location location-desktop">.*?<span>(.*?)</span>', re.S),
+}
+
+
+class ForasnaProvider(BaseProvider):
+    """Forasna (فرصنا) — one of Egypt's biggest local job boards.
+
+    Its public search page carries the whole result card: title, company, city and
+    an exact ISO posting date. Titles are Arabic, so the English words in the
+    posting's own URL slug are added to the description; that keeps the relevance
+    gate able to recognise "Branch Accountant" behind "محاسب فرع".
+    """
+
+    name = "forasna"
+    region = "egypt"
+    label = "Forasna — Egypt (jobs board, free)"
+    fetch_ttl = FAST_FEED_TTL_SECONDS
+    keyword_search = True
+    MAX_JOBS = 60
+    MAX_PHRASES = 3
+
+    def fetch(self, titles, skills, locations, remote_only):
+        jobs: list[ProviderJob] = []
+        seen: set[str] = set()
+        for phrase in search_terms(titles, skills)[: self.MAX_PHRASES]:
+            html = _cached_get_text(f"forasna:{phrase}", FORASNA_SEARCH_API,
+                                    params={"query": phrase}, timeout=30.0)
+            if not html:
+                continue
+            for block in html.split('class="result-wrp"')[1:]:
+                url = self._field("url", block)
+                title = self._field("title", block)[:300]
+                if not url or not title:
+                    continue
+                slug = unquote(url.rsplit("/", 1)[-1])
+                external_id = (re.search(r"-(\d+)$", slug) or [None, slug])[1]
+                if external_id in seen:
+                    continue
+                seen.add(external_id)
+                location = self._field("location", block)
+                company = self._company(block)
+                jobs.append(ProviderJob(
+                    source=self.name,
+                    external_id=str(external_id),
+                    title=title,
+                    company=company[:200],
+                    location=location[:300],
+                    country="Egypt",
+                    remote=_remote_word(f"{title} {location}"),
+                    description=(f"Forasna. {slug.replace('-', ' ')}")[:4000],
+                    url=url,
+                    posted_date=_parse_loose_date(self._field("date", block)),
+                ))
+                if len(jobs) >= self.MAX_JOBS:
+                    return jobs
+        return jobs
+
+    @staticmethod
+    def _field(name: str, block: str) -> str:
+        match = _FORASNA_BLOCK_FIELDS[name].search(block)
+        return _strip_html(unescape(match.group(1))).strip() if match else ""
+
+    @staticmethod
+    def _company(block: str) -> str:
+        meta = re.search(r'<div class="company-meta">(.*?)</div>', block, re.S)
+        if not meta:
+            return ""
+        head = re.split(r'<span class="location', meta.group(1), maxsplit=1)[0]
+        return _strip_html(unescape(head)).strip()
+
+
+_TANQEEB_CARD = re.compile(r'<article\b[^>]*data-job-id="(\d+)"[^>]*>(.*?)</article>', re.S)
+
+
+def _tanqeeb_attr(tag: str, name: str) -> str:
+    match = re.search(rf'data-job-{name}="([^"]*)"', tag)
+    return unescape(match.group(1)).strip() if match else ""
+
+
+class TanqeebProvider(BaseProvider):
+    """Tanqeeb (تنقيب) — an Egypt-first aggregator that indexes Bayt, LinkedIn and
+    local boards.
+
+    Its public search cards expose the country, city, workplace, source, exact date
+    and keyword list as data attributes, so one request per phrase yields Egypt
+    postings with everything the relevance gate needs and no detail pages.
+    """
+
+    name = "tanqeeb"
+    region = "egypt"
+    label = "Tanqeeb — Egypt (aggregator, free)"
+    fetch_ttl = FAST_FEED_TTL_SECONDS
+    keyword_search = True
+    MAX_JOBS = 60
+    MAX_PHRASES = 3
+
+    def fetch(self, titles, skills, locations, remote_only):
+        jobs: list[ProviderJob] = []
+        seen: set[str] = set()
+        for phrase in search_terms(titles, skills)[: self.MAX_PHRASES]:
+            html = _cached_get_text(f"tanqeeb:{phrase}", TANQEEB_SEARCH_API,
+                                    params={"keywords": phrase, "country": "egypt"}, timeout=30.0)
+            if not html:
+                continue
+            for match in _TANQEEB_CARD.finditer(html):
+                tag = match.group(0).split(">", 1)[0] + ">"
+                country = _tanqeeb_attr(tag, "country")
+                location = _tanqeeb_attr(tag, "location")
+                if country.lower() != "egypt" and not _is_egypt(location):
+                    continue
+                external_id = match.group(1)
+                title = _tanqeeb_attr(tag, "name")[:300]
+                if not title or external_id in seen:
+                    continue
+                seen.add(external_id)
+                source = _tanqeeb_attr(tag, "source")
+                keywords = _tanqeeb_attr(tag, "keywords")
+                path = _tanqeeb_attr(tag, "url")
+                skills_list = [k.strip() for k in keywords.split(",") if k.strip()][:10]
+                salary = _tanqeeb_attr(tag, "salary")
+                smin, smax, scur = _salary_amount(salary)
+                jobs.append(ProviderJob(
+                    source=self.name,
+                    external_id=external_id,
+                    title=title,
+                    company=_tanqeeb_attr(tag, "company")[:200],
+                    location=location or "Egypt",
+                    country="Egypt",
+                    remote=_remote_word(_tanqeeb_attr(tag, "workplace") + " " + location),
+                    employment_type=_tanqeeb_attr(tag, "type"),
+                    experience_level=_tanqeeb_attr(tag, "experience"),
                     salary_min=smin,
                     salary_max=smax,
                     salary_currency=scur,
-                    employment_type=str(item.get("contractType") or ""),
-                    experience_level=str(item.get("experience") or ""),
-                    description=("Job functions: " + ", ".join(functions)) if functions else "",
-                    url=str(item.get("url") or ""),
-                    skills=functions,
-                    posted_date=_parse_date(item.get("postedAt")),
+                    description=(f"via {source}. {keywords}" if source else keywords)[:4000],
+                    url=path if path.startswith("http") else f"https://www.tanqeeb.com{path}",
+                    skills=skills_list,
+                    posted_date=_parse_loose_date(_tanqeeb_attr(tag, "date")),
                 ))
+                if len(jobs) >= self.MAX_JOBS:
+                    return jobs
         return jobs
+
+
+def _salary_amount(text: str) -> tuple[int | None, int | None, str | None]:
+    """Tanqeeb writes salary currency-first ("JOD 1000 - 1400")."""
+    match = re.search(r"\b([A-Z]{3})\s*([\d,.]+)\s*[-–]\s*([\d,.]+)", text or "")
+    if not match:
+        return None, None, None
+    low = _int_or_none(re.sub(r"[^\d]", "", match.group(2)))
+    high = _int_or_none(re.sub(r"[^\d]", "", match.group(3)))
+    return low, high, match.group(1)
 
 
 _adzuna_turn = 0
@@ -1339,6 +1518,7 @@ class AdzunaProvider(BaseProvider):
     """
 
     name = "adzuna"
+    region = "egypt"
     fetch_ttl = QUOTA_CAPPED_TTL_SECONDS
     keep_cache_window = True
     label = "Adzuna — Egypt (aggregator, key required)"
@@ -1428,6 +1608,7 @@ class JoobleProvider(BaseProvider):
     """
 
     name = "jooble"
+    region = "egypt"
     fetch_ttl = QUOTA_CAPPED_TTL_SECONDS
     keep_cache_window = True
     label = "Jooble — Egypt (aggregator, key required)"
@@ -1677,6 +1858,12 @@ REGISTRY: dict[str, type[BaseProvider]] = {
     # Jobs), then the remaining boards — and the UI lists the sites the same way.
     LinkedInProvider.name: LinkedInProvider,
     JSearchProvider.name: JSearchProvider,
+    # Egypt-first boards with free public search pages: Talent.com's Egypt index,
+    # Forasna and Tanqeeb. Each takes his own saved phrases, so their postings match
+    # his roles instead of being a generic latest feed.
+    TalentProvider.name: TalentProvider,
+    ForasnaProvider.name: ForasnaProvider,
+    TanqeebProvider.name: TanqeebProvider,
     # Direct-to-employer channels: their own careers APIs, all free and all
     # filtered to Egypt before anything is stored.
     AmazonProvider.name: AmazonProvider,
@@ -1684,10 +1871,8 @@ REGISTRY: dict[str, type[BaseProvider]] = {
     SmartRecruitersProvider.name: SmartRecruitersProvider,
     AdzunaProvider.name: AdzunaProvider,
     JoobleProvider.name: JoobleProvider,
-    # Employer boards with roles open to worldwide remote applicants, and Jobgether's
-    # remote aggregator feed — both public JSON, no keys.
+    # Employer boards with roles open to worldwide remote applicants.
     EmployerBoardsProvider.name: EmployerBoardsProvider,
-    JobgetherProvider.name: JobgetherProvider,
     RemotiveProvider.name: RemotiveProvider,
     RemoteOKProvider.name: RemoteOKProvider,
     JobicyProvider.name: JobicyProvider,

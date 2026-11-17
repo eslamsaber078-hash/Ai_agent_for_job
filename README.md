@@ -45,7 +45,7 @@ Leave this window open. Check it works:
 - API docs: <http://127.0.0.1:8000/docs>
 - Health: <http://127.0.0.1:8000/api/health> → `{"status":"ok", ...}`
 
-On first start the app creates the database and registers the seventeen real job
+On first start the app creates the database and registers the eighteen real job
 sources. Jobs are fetched from the live public APIs — nothing is pre-seeded.
 
 > `--reload` restarts the backend when a `.py` file changes. Changes to `.env` are **not**
@@ -152,7 +152,9 @@ empty, then filled by the next refresh from the real sources.
 | `adzuna` | **Yes, needs keys** | Adzuna's Egypt job index (`api.adzuna.com/v1/api/jobs/eg/search/1`). **Needs `ADZUNA_APP_ID` + `ADZUNA_APP_KEY`** (free pair at developer.adzuna.com). Without them it fetches nothing and the log says so — the UI shows it as "needs an API key — skipped until then". One phrase per import, rotating like JSearch, so the free daily allowance lasts. |
 | `jooble` | **Yes, needs a key** | Jooble's Egypt aggregator, which indexes the local boards. **Needs `JOOBLE_API_KEY`** (free registration at jooble.org/api). Without a key it fetches nothing and the log says `jooble skipped: JOOBLE_API_KEY is not configured` — the UI shows it as "needs an API key — skipped until then", exactly like JSearch. One phrase per import, rotating like JSearch. |
 | `employers` | **Yes** | Worldwide-remote roles at employers that hire through their own public Greenhouse/Ashby boards (Canonical, Stripe, GitLab, Supabase, Railway, Netlify, Airbnb, Mozilla, PostHog, Cloudflare, Discord, Brex). Every posting's location is checked against two honest rules before anything is stored: it must be open to Egypt or open worldwide — a "Remote - US" or "Remote - Canada" ad is skipped, never relabelled. |
-| `jobgether` | **Yes** | Jobgether's remote aggregator feed (jobgether.com/api/v1/jobs), no key. Two pages per import, same Egypt-or-worldwide location gate, salary range read when the ad states one. |
+| `talent` | **Yes** | Talent.com's Egypt index (`eg.talent.com`), no key. Each search phrase is asked with `l=Egypt`, and a card is kept only when its location is inside Egypt or openly remote. English titles, exact ISO posting dates, one request per phrase. |
+| `forasna` | **Yes** | Forasna (فرصنا), the Egyptian jobs board's public search results, no key. Arabic titles and cities are read straight from the result cards; the English URL slug is kept in the description so the relevance gate can still match "Branch Accountant" to an Arabic-titled card. It returns nothing for a phrase it has no ads for, which is a real zero, not a failure. |
+| `tanqeeb` | **Yes** | Tanqeeb (تنقيب), an Egypt-first aggregator that indexes Bayt, Wuzzuf and LinkedIn. Its result cards expose country, city, workplace, source, exact date, salary and keywords as data attributes, so one request per phrase yields Egypt postings with no detail page. Postings whose country is not Egypt are skipped, never relabelled. |
 
 Network failures are logged and skipped, never crash the search. Free public APIs must not
 be hammered, so each feed's answer is cached for a while: **3 minutes** for the keyless
@@ -190,8 +192,8 @@ How the phrases are used:
 This raises how much of a site's relevant inventory a run touches, but it is still a search
 of a third party's index, not a firehose of everything posted. No source can promise 100%:
 each one ranks and caps what it returns, LinkedIn is limited to the guest listing window, and
-the Egyptian boards that block automated access (Wuzzuf's own site, Forasna, Bayt) only
-contribute whatever Google has indexed of them.
+the Egyptian boards that block automated access (Wuzzuf's own site, Bayt) only contribute
+whatever Google has indexed of them.
 
 ### Importing one site at a time
 
@@ -265,7 +267,9 @@ Nothing is listed as integrated unless it actually returns live jobs.
 | Employer career sites (Workday) | Integrated | Free per-employer Workday endpoints, searched for "Egypt" and location-checked before anything is stored. Citi, Pfizer, Sanofi, AstraZeneca, Novartis, Cisco, Unilever, PwC, HP, Maersk and Accenture are listed today; each Egypt hit's own job page is fetched for the real posting date and description. |
 | Employer career sites (SmartRecruiters) | Integrated | Same idea on SmartRecruiters' public postings API, no key. Delivery Hero is listed today. |
 | Employer boards (Greenhouse / Ashby) | Integrated | Free per-employer board APIs for 12 remote-first employers: Canonical, Stripe, GitLab, Supabase, Railway, Netlify, Airbnb, Mozilla, PostHog, Cloudflare, Discord, Brex. Only postings genuinely open to Egypt or worldwide are kept — "Remote - US/Canada/EU" ads are skipped, never relabelled. |
-| Jobgether | Integrated | Free remote aggregator feed, two pages per import, same Egypt-or-worldwide location gate. |
+| Talent.com Egypt | Integrated | Public Egypt search pages (`eg.talent.com/jobs`), no key. Cards carry an exact ISO date and an Egypt-or-open-remote location, both checked before a job is stored. |
+| Forasna (فرصنا) | Integrated | The Egyptian board's public search results are parsed, no key. Arabic titles, cities and ISO dates come from the result cards; phrases Forasna has no ads for return zero honestly. |
+| Tanqeeb (تنقيب) | Integrated | Egypt-first aggregator, no key. Country, city, workplace, source, date, salary and keywords are read from the cards' data attributes; non-Egypt postings are skipped. |
 | Jooble — Egypt | Integrated, needs a key | `JOOBLE_API_KEY` (free at jooble.org/api) unlocks a large Egypt aggregator that indexes the local boards. Without the key the source stays silent and the UI says "needs an API key — skipped until then". |
 | Adzuna — Egypt | Integrated, needs keys | The `adzuna` provider is wired and honest: set `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` (free pair at developer.adzuna.com) and it imports Egypt postings at one rotating phrase per run; without the pair it stays silent. |
 | Findwork | Needs a key | `findwork.dev/api/jobs/` answers **401** — a token is issued only after sign-up. |
@@ -276,7 +280,7 @@ Nothing is listed as integrated unless it actually returns live jobs.
 | LinkedIn Jobs | Integrated | The public guest listings (`linkedin.com/jobs-guest/...`) answer without a login, so those are fetched. The authenticated job-search API is still off-limits and is not used. |
 | Indeed | Blocked | Publisher API retired in 2018; the search page answers **403** to automated calls. Its postings do arrive through the Google for Jobs index (`jsearch`). |
 | Wuzzuf | Integrated via Google | Wuzzuf's own search pages answer **403** (Cloudflare) and are never scraped. Wuzzuf publishes its openings to Google for Jobs, which the `jsearch` source reads, so they land tagged `[via Wuzzuf]`. |
-| Forasna | Blocked | No public API; automated access refused. Link only. |
+| Forasna | Integrated | Its public search results are fetched and parsed; no sign-in and no CAPTCHA involved. |
 | Bayt | Blocked | No public API for anonymous search; **403**. Like Wuzzuf, its postings reach the app through the Google for Jobs index tagged `[via Bayt.com]`. |
 | Lever boards | Not added | Keyless but no global search; the useful Lever boards (Spotify, Binance, Kraken) mostly carry US/EU-locked postings, and the probe found nothing open to Egypt. Greenhouse and Ashby cover the same ground with the twelve boards above. |
 
@@ -292,8 +296,9 @@ bar and in Automation Settings on the next restart.
 
 1. **Dashboard** — jobs discovered, high-match count, saved, applications, interviews,
    offers, best matches, status breakdown. All numbers are computed from the database.
-2. **Find Jobs** — per-site import bar (one row per source, with its live posting
-   count), search, filters (level, employment type, source, remote), sort (newest first by
+2. **Find Jobs** — per-site import bar grouped into **Inside Egypt** and **Outside Egypt**
+   (each group shows its site and live-posting totals), search, filters (level, employment
+   type, source, remote), sort (newest first by
    default), save, open details, "Track application", plus deep links to the Egyptian boards
    that cannot be imported.
 3. **AI Job Matches** — 0–100 estimated score per job with the weighted reasons behind it
@@ -447,16 +452,15 @@ npm run build
   address that means anyone can register (their data stays invisible to other accounts);
   see section 10 for the deployment path.
 - **Match scores are estimates** from your stated profile, not a guarantee of an interview.
-- Seventeen real job sources ship: LinkedIn guest listings, Google for Jobs Egypt via
-  JSearch, six direct-to-employer or Egypt aggregator channels (Amazon Careers Egypt, Workday
-  career sites, SmartRecruiters, Jooble Egypt, Adzuna Egypt, and the worldwide-remote
-  Greenhouse/Ashby employer boards), Jobgether's remote feed, and the seven remote boards
-  (Remotive, RemoteOK, Jobicy, Arbeitnow, We Work Remotely, Himalayas, Working Nomads).
-  JSearch needs `RAPIDAPI_KEY`, Jooble needs `JOOBLE_API_KEY`, and Adzuna needs
-  `ADZUNA_APP_ID` + `ADZUNA_APP_KEY`; the other fourteen need nothing. Wuzzuf, Bayt and
+- Eighteen real job sources ship, split into the two groups Find Jobs shows. **Inside Egypt**:
+  LinkedIn guest listings, Google for Jobs Egypt via JSearch, Talent.com Egypt, Forasna,
+  Tanqeeb, Amazon Careers Egypt, Workday career sites, SmartRecruiters, Adzuna Egypt and
+  Jooble Egypt. **Outside Egypt**: the worldwide-remote Greenhouse/Ashby employer boards and
+  the seven remote boards (Remotive, RemoteOK, Jobicy, Arbeitnow, We Work Remotely, Himalayas,
+  Working Nomads). JSearch needs `RAPIDAPI_KEY`, Jooble needs `JOOBLE_API_KEY`, and Adzuna
+  needs `ADZUNA_APP_ID` + `ADZUNA_APP_KEY`; the other fifteen need nothing. Wuzzuf, Bayt and
   Indeed postings arrive through Google's job index rather than from their own sites, which
-  refuse automated access. Forasna still cannot be fetched at all, so Find Jobs links out
-  to it instead. See "Every site you asked about" in section 3 for each verdict.
+  refuse automated access. See "Every site you asked about" in section 3 for each verdict.
 - **Discovery is a search, not a firehose.** Each import asks each keyword site a few of your
   phrases and keeps what comes back, and every source caps and ranks its own results. That
   covers a good share of what is posted for your profile, but no honest tool can promise you

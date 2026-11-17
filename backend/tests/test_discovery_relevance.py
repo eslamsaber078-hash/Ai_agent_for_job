@@ -382,34 +382,115 @@ def test_open_remote_distinguishes_worldwide_from_country_locked():
     assert not _open_remote("Remote - Abu Dhabi")
 
 
-def test_jobgether_reads_open_remote_jobs_and_salary(monkeypatch):
-    from app.services.providers import JobgetherProvider, clear_fetch_cache
+def test_talent_reads_egypt_cards_and_skips_locked_locations(monkeypatch):
+    from app.services.providers import TalentProvider, clear_fetch_cache
 
-    def fake_get(key, url, **kwargs):
-        if kwargs.get("params") == {"page": 2}:
-            return {"jobs": []}
-        return {"jobs": [
-            {"id": "j1", "title": "Backend Engineer", "company": "Acme",
-             "url": "https://jobgether.com/offer/j1", "location": "Worldwide",
-             "remote": "Full Remote", "contractType": "Full time",
-             "experience": "Mid-level (2-5 years)", "salaryRange": "67200-80000 USD",
-             "jobFunctions": ["Python Developer", "Backend"], "postedAt": "2026-10-27T09:31:02.812Z"},
-            {"id": "j2", "title": "Frontend Engineer", "company": "Acme",
-             "url": "https://jobgether.com/offer/j2",
-             "location": "United States, California", "remote": "Full Remote",
-             "jobFunctions": ["Frontend"], "postedAt": "2026-10-27T09:31:02.812Z"},
-        ]}
+    html = """
+    <article class="JobCard_card__a JobCard_cardActive__b">
+      <h2 class="JobCard_title__t">Flutter Developer</h2>
+      <span class="JobCard_company__c">Advansys</span>
+      <span class="JobCard_location__l">Cairo, Cairo Governorate, EG</span>
+      <p class="JobCard_snippet__s">Build mobile apps for iOS and Android.</p>
+      <time class="JobCard_timeText__w" dateTime="2026-11-08T12:11:42Z">8 days ago</time>
+      <a href="/view?id=645107402656583720">more</a>
+    </article>
+    <article class="JobCard_card__a">
+      <h2 class="JobCard_title__t">Backend Engineer</h2>
+      <span class="JobCard_company__c">Remote Co</span>
+      <span class="JobCard_location__l">Remote - United States</span>
+      <time class="JobCard_timeText__w" dateTime="2026-11-09T08:00:00Z">yesterday</time>
+      <a href="/view?id=111">more</a>
+    </article>
+    """
 
-    monkeypatch.setattr(providers_mod, "_cached_get_json", fake_get)
-    jobs = JobgetherProvider().fetch([], [], [], False)
+    monkeypatch.setattr(providers_mod, "_cached_get_text", lambda *a, **k: html)
+    jobs = TalentProvider().fetch(["Flutter Developer"], ["Flutter"], ["Egypt"], False)
     clear_fetch_cache()
 
-    assert [j.title for j in jobs] == ["Backend Engineer"]
+    assert [j.title for j in jobs] == ["Flutter Developer"]
     job = jobs[0]
-    assert job.salary_min == 67200 and job.salary_max == 80000 and job.salary_currency == "USD"
-    assert job.skills == ["Python Developer", "Backend"]
+    assert job.company == "Advansys"
+    assert job.location == "Cairo, Cairo Governorate, EG"
+    assert job.country == "Egypt"
+    assert job.external_id == "645107402656583720"
+    assert job.url == "https://eg.talent.com/view?id=645107402656583720"
+    assert job.description.startswith("Build mobile apps")
+    assert job.posted_date == datetime(2026, 11, 8, 12, 11, 42, tzinfo=timezone.utc)
+
+
+def test_forasna_parses_card_and_keeps_the_english_slug(monkeypatch):
+    from app.services.providers import ForasnaProvider, clear_fetch_cache
+
+    url = ("https://forasna.com/job/p/%D9%85%D8%AD%D8%A7%D8%B3%D8%A8-"
+           "Branch-Accountant-447467")
+    html = f"""
+    <div class="result-wrp">
+      <h2 class="job-title"><a href="{url}"><span>محاسب فرع</span></a></h2>
+      <span class="date date-desktop">
+        <time class="time1 job-date" datetime="2026-11-14T14:09:46+02:00">منذ يومين</time>
+      </span>
+      <div class="company-meta">
+        <span>الشركة السويسرية</span>
+        <span class="location location-desktop"> - <span>القاهرة الجديدة</span></span>
+      </div>
+    </div>
+    """
+
+    monkeypatch.setattr(providers_mod, "_cached_get_text", lambda *a, **k: html)
+    jobs = ForasnaProvider().fetch(["accountant"], [], ["Egypt"], False)
+    clear_fetch_cache()
+
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.title == "محاسب فرع"
+    assert job.company == "الشركة السويسرية"
+    assert job.location == "القاهرة الجديدة"
+    assert job.external_id == "447467"
+    # The English words in the slug keep the relevance gate working on Arabic titles.
+    assert "Branch Accountant" in job.description
+    assert job.posted_date == datetime(2026, 11, 14, 12, 9, 46, tzinfo=timezone.utc)
+
+
+def test_tanqeeb_keeps_only_egypt_cards_and_reads_attributes(monkeypatch):
+    from app.services.providers import TanqeebProvider, clear_fetch_cache
+
+    html = """
+    <article class="card" data-job-id="21184560" data-job-name="Flutter Developer"
+      data-job-company="Adree" data-job-location="Egypt - Cairo"
+      data-job-workplace="Remote" data-job-type="Full Time" data-job-source="LinkedIn"
+      data-job-country="Egypt" data-job-date="16 November 2026"
+      data-job-url="/jobs-in-egypt/all/jobs/021184560.html"
+      data-job-salary="EGP 20000 - 30000" data-job-experience="2 to 5 years"
+      data-job-keywords="Flutter,Dart"><div class="card-body">details</div></article>
+    <article class="card" data-job-id="99" data-job-name="Sales Rep"
+      data-job-country="Jordan" data-job-location="Jordan - Amman"
+      data-job-url="/jobs-in-jordan/all/jobs/021184561.html"></article>
+    """
+
+    monkeypatch.setattr(providers_mod, "_cached_get_text", lambda *a, **k: html)
+    jobs = TanqeebProvider().fetch(["Flutter Developer"], ["Flutter"], ["Egypt"], False)
+    clear_fetch_cache()
+
+    assert [j.title for j in jobs] == ["Flutter Developer"]
+    job = jobs[0]
+    assert job.company == "Adree"
+    assert job.location == "Egypt - Cairo"
     assert job.remote is True
-    assert job.posted_date == datetime(2026, 10, 27, 9, 31, 2, 812000, tzinfo=timezone.utc)
+    assert job.external_id == "21184560"
+    assert job.url == "https://www.tanqeeb.com/jobs-in-egypt/all/jobs/021184560.html"
+    assert job.skills == ["Flutter", "Dart"]
+    assert (job.salary_min, job.salary_max, job.salary_currency) == (20000, 30000, "EGP")
+    assert job.posted_date == datetime(2026, 11, 16, tzinfo=timezone.utc)
+
+
+def test_every_registered_provider_declares_a_region():
+    from app.services import REGISTRY
+
+    assert {cls.region for cls in REGISTRY.values()} <= {"egypt", "worldwide"}
+    for name in ("linkedin", "talent", "forasna", "tanqeeb", "jsearch", "amazon", "adzuna"):
+        assert REGISTRY[name].region == "egypt"
+    for name in ("remotive", "remoteok", "himalayas", "employers"):
+        assert REGISTRY[name].region == "worldwide"
 
 
 def test_adzuna_stays_silent_without_keys_and_parses_with_them(monkeypatch):

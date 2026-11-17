@@ -41,9 +41,17 @@ const SORTS = [
 
 /** Verified search-URL shapes; they open in the browser, the app never scrapes them. */
 const EGYPT_SEARCH_SITES = [
-  { name: "Forasna", url: (q: string) => `https://forasna.com/search/jobs/?q=${encodeURIComponent(q)}` },
+  { name: "Wuzzuf", url: (q: string) => `https://wuzzuf.net/search/jobs/?q=${encodeURIComponent(q)}&l=egypt` },
   { name: "Bayt", url: (q: string) => `https://www.bayt.com/en/search/jobs/?q=${encodeURIComponent(q)}` },
+  { name: "OLX Egypt", url: (q: string) => `https://www.olx.com.eg/en/jobs/?q=${encodeURIComponent(q)}` },
+  { name: "Careerjet Egypt", url: (q: string) => `https://www.careerjet.com.eg/jobs?s=${encodeURIComponent(q)}&l=Egypt` },
 ];
+
+/** The import list is split into the two groups the owner asked for. */
+const SOURCE_REGIONS = [
+  { key: "egypt", title: "Inside Egypt" },
+  { key: "worldwide", title: "Outside Egypt" },
+] as const;
 
 function FilterLabel({ children }: { children: React.ReactNode }) {
   return <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{children}</span>;
@@ -353,49 +361,64 @@ export function FindJobsPage() {
         </CardHeader>
         {showImport && (
         <CardContent className="space-y-4">
-          <div className="grid gap-x-8 sm:grid-cols-2">
-            {sites.map((s) => {
-              const busy = importing === s.name;
+          {sites.length === 0 ? (
+            <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+              {sitesError ? (
+                <>{t("The site list did not load: {error}.", { error: sitesError })}{" "}
+                  <button type="button" className="font-semibold text-foreground underline underline-offset-2" onClick={loadSites}>
+                    {t("Try again")}
+                  </button>
+                </>
+              ) : t("Loading the site list…")}
+            </p>
+          ) : (
+            SOURCE_REGIONS.map((group) => {
+              const groupSites = sites.filter((s) => s.region === group.key);
+              const liveTotal = groupSites.reduce((sum, s) => sum + s.live_jobs, 0);
               return (
-                <button
-                  key={s.name}
-                  type="button"
-                  disabled={importing !== null}
-                  onClick={() => importSite(s.name)}
-                  title={`${sourceLabel(s.name)} — ${t("import only from this site")}`}
-                  className={cn(
-                    "group flex min-w-0 items-center gap-3 border-b border-border/60 py-2.5 text-start transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-                    busy && "bg-muted/50"
-                  )}
-                >
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{sourceLabel(s.name)}</span>
-                  <span className={cn("nums shrink-0 text-[11px]", s.live_jobs ? "text-foreground" : "text-muted-foreground")}>
-                    {!s.key_ready
-                      ? t("needs a key")
-                      : s.live_jobs
-                        ? t("{n} live", { n: s.live_jobs })
-                        : s.fetched_at
-                          ? t("nothing new last run")
-                          : t("not imported yet")}
-                  </span>
-                  {busy
-                    ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-                    : <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-foreground" />}
-                </button>
+                <section key={group.key} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-3 border-b border-border/70 pb-1.5">
+                    <h3 className="text-[12px] font-semibold tracking-wide">{t(group.title)}</h3>
+                    <span className="nums shrink-0 text-[11px] text-muted-foreground">
+                      {t("{sites} sites · {jobs} live", { sites: groupSites.length, jobs: liveTotal })}
+                    </span>
+                  </div>
+                  <div className="grid gap-x-8 sm:grid-cols-2">
+                    {groupSites.map((s) => {
+                      const busy = importing === s.name;
+                      return (
+                        <button
+                          key={s.name}
+                          type="button"
+                          disabled={importing !== null}
+                          onClick={() => importSite(s.name)}
+                          title={`${sourceLabel(s.name)} — ${t("import only from this site")}`}
+                          className={cn(
+                            "group flex min-w-0 items-center gap-3 border-b border-border/60 py-2.5 text-start transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+                            busy && "bg-muted/50"
+                          )}
+                        >
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{sourceLabel(s.name)}</span>
+                          <span className={cn("nums shrink-0 text-[11px]", s.live_jobs ? "text-foreground" : "text-muted-foreground")}>
+                            {!s.key_ready
+                              ? t("needs a key")
+                              : s.live_jobs
+                                ? t("{n} live", { n: s.live_jobs })
+                                : s.fetched_at
+                                  ? t("nothing new last run")
+                                  : t("not imported yet")}
+                          </span>
+                          {busy
+                            ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                            : <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-foreground" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
               );
-            })}
-            {sites.length === 0 && (
-              <p className="col-span-full rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                {sitesError ? (
-                  <>{t("The site list did not load: {error}.", { error: sitesError })}{" "}
-                    <button type="button" className="font-semibold text-foreground underline underline-offset-2" onClick={loadSites}>
-                      {t("Try again")}
-                    </button>
-                  </>
-                ) : t("Loading the site list…")}
-              </p>
-            )}
-          </div>
+            })
+          )}
 
           {importing && !importProgress && (
             <p className="text-xs text-muted-foreground">{t("Starting the import…")}</p>

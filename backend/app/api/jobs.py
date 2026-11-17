@@ -172,6 +172,7 @@ def list_sources(db: Session = Depends(get_db), profile: UserProfile = Depends(g
         out.append(dict(
             name=name,
             label=row.label if row else cls.label,
+            region=cls.region,
             enabled=row.enabled if row else True,
             requires_key=cls.requires_key,
             key_ready=bool(getattr(config, key_name, "")) if key_name else True,
