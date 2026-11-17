@@ -64,6 +64,18 @@ CORS_ORIGINS = [
 SESSION_COOKIE_SECURE = _env("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
 SESSION_MAX_AGE_SECONDS = int(_env("SESSION_MAX_AGE_SECONDS", "604800"))
 
+# Hardening. Production is detected from the secure-cookie flag (Render sets it)
+# or an explicit ENVIRONMENT value; API docs are closed there by default because
+# they list every endpoint and schema to anyone who asks.
+ENVIRONMENT = _env("ENVIRONMENT", "development").lower()
+IS_PRODUCTION = SESSION_COOKIE_SECURE or ENVIRONMENT in {"production", "prod"}
+ENABLE_API_DOCS = _env("ENABLE_API_DOCS", "0" if IS_PRODUCTION else "1").lower() in {"1", "true", "yes", "on"}
+# Largest JSON body the API will buffer. The resume endpoint has its own, larger
+# ceiling derived from MAX_RESUME_SIZE_MB.
+API_BODY_LIMIT_BYTES = int(_env("API_BODY_LIMIT_BYTES", str(1024 * 1024)))
+# Writes per client per minute (0 disables the limiter, as the tests do).
+API_WRITE_LIMIT_PER_MINUTE = int(_env("API_WRITE_LIMIT_PER_MINUTE", "240"))
+
 HOST = _env("HOST", "127.0.0.1")
 PORT = int(_env("PORT", "8000"))
 

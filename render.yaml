@@ -15,15 +15,21 @@ services:
     # --proxy-headers/--forwarded-allow-ips: Render's proxy terminates HTTPS, so the
     # app has to read the scheme from the headers or it treats every visitor as
     # plain HTTP and refuses to set the secure session cookie.
+    # --no-server-header: the browser does not need to know which server software
+    # and version is answering.
     # --timeout-keep-alive: uvicorn closes an idle connection after 5s by default.
     # The proxy pools sockets for longer, so the next request could be sent down a
     # connection this process had already closed — seen from the browser as a
     # dropped connection. 75s keeps both ends agreeing.
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --timeout-keep-alive 75
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --no-server-header --timeout-keep-alive 75
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
+      # Enables the production hardening paths even if the cookie flag is ever
+      # loosened: API docs stay closed and the app knows it is not a dev box.
+      - key: ENVIRONMENT
+        value: production
       # Paste the Postgres connection string from Neon (Free, no card). Do NOT
       # keep the local sqlite default: Render's disk is wiped on every deploy.
       - key: DATABASE_URL

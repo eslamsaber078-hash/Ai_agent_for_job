@@ -10,12 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import OperationalError, TimeoutError as SATimeoutError
 
 from .api import applications, assistant, auth, automation, dashboard, jobs, matching, profile
-from .config import CORS_ORIGINS, OPENAI_API_KEY
+from .config import (CORS_ORIGINS, ENABLE_API_DOCS, OPENAI_API_KEY)
 from .database import Base, SessionLocal, engine, ensure_schema_upgrades, warm_pool
 from .models import SearchPreference
 from .schemas import HealthOut
+from .security import BodySizeLimit, SecurityHeaders, WriteThrottle
 from .services import (
     ai_available,
     ensure_sources,
@@ -99,6 +101,10 @@ app = FastAPI(
     description="Personal AI-powered job-search agent: discovery, matching, applications, and generated materials.",
     version="1.0.0",
     lifespan=lifespan,
+    # The endpoint map is for development only; production serves the API without it.
+    docs_url="/docs" if ENABLE_API_DOCS else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
@@ -195,6 +201,13 @@ class Admission:
 
 app.add_middleware(Admission)
 
+# Added last, so these wrap everything above: an oversized body or an abusive write
+# is refused before it reaches admission control, and every refusal still carries
+# the security headers.
+app.add_middleware(BodySizeLimit)
+app.add_middleware(WriteThrottle)
+app.add_middleware(SecurityHeaders)
+
 
 for router in (auth.router, jobs.router, profile.router, matching.router, assistant.router,
                applications.router, dashboard.router, automation.router):
@@ -205,6 +218,23 @@ for router in (auth.router, jobs.router, profile.router, matching.router, assist
 async def unhandled_exception_handler(request: Request, exc: Exception):
     log.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+async def _database_unavailable(request: Request, exc: Exception):
+    """A dropped or exhausted database is a temporary outage, not a crash.
+
+    Answering 503 + Retry-After keeps the retry logic on the client side honest and
+    tells the platform the process is alive but the dependency is not. The driver's
+    message is never echoed — it can name hosts and users.
+    """
+    log.warning("Database unavailable on %s %s (%s)", request.method,
+                request.url.path, type(exc).__name__)
+    return JSONResponse(status_code=503, content={"detail": "The database is unavailable. Retry shortly."},
+                        headers={"Retry-After": "5"})
+
+
+for _exc_type in (OperationalError, SATimeoutError):
+    app.add_exception_handler(_exc_type, _database_unavailable)
 
 
 @app.get("/api/health", response_model=HealthOut, tags=["system"])

@@ -10,6 +10,9 @@ os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.gettempdir(), 
 os.environ["OPENAI_API_KEY"] = ""
 os.environ["GEMINI_API_KEY"] = ""
 os.environ["GROQ_API_KEY"] = ""
+# The suite makes hundreds of writes from one client in a minute; the per-client
+# write ceiling protects live traffic, so it is switched off for the tests.
+os.environ["API_WRITE_LIMIT_PER_MINUTE"] = "0"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

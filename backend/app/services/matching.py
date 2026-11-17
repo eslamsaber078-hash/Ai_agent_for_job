@@ -691,6 +691,12 @@ class _AIAnalysis(BaseModel):
 _NARRATIVE_CACHE: dict[tuple[int, str, str], _AIAnalysis | None] = {}
 _NARRATIVE_INFLIGHT: set[tuple[int, str, str]] = set()
 _NARRATIVE_LOCK = threading.Lock()
+# Two workers at a time and a bounded backlog: a burst of panels asking for different
+# jobs used to spawn one thread per request, and a stalled free provider kept every
+# one of them alive for its full timeout. Anything past the cap simply keeps the
+# measured prose that is already on screen.
+_NARRATIVE_SLOTS = threading.BoundedSemaphore(2)
+_NARRATIVE_MAX_PENDING = 32
 
 
 def _narrative_key(job: Job, profile: UserProfile, lang: str) -> tuple[int, str, str]:
@@ -750,6 +756,7 @@ def _run_narrative(key: tuple[int, str, str], system: str, user: str) -> None:
                 _NARRATIVE_CACHE.clear()
             _NARRATIVE_CACHE[key] = result
             _NARRATIVE_INFLIGHT.discard(key)
+        _NARRATIVE_SLOTS.release()
 
 
 def _schedule_narrative(key: tuple[int, str, str], system: str, user: str) -> None:
@@ -758,14 +765,26 @@ def _schedule_narrative(key: tuple[int, str, str], system: str, user: str) -> No
     A free provider that stalls used to hold the request for its whole 20 s timeout,
     while the measured breakdown was ready in milliseconds and the model only
     rewrites the prose. One worker per answer: a second view while it runs joins the
-    first instead of spending another quota call.
+    first instead of spending another quota call. The worker pool is capped, so a
+    flood of different postings cannot grow it without bound.
     """
     with _NARRATIVE_LOCK:
         if key in _NARRATIVE_CACHE or key in _NARRATIVE_INFLIGHT:
             return
+        if len(_NARRATIVE_INFLIGHT) >= _NARRATIVE_MAX_PENDING:
+            return
+        if not _NARRATIVE_SLOTS.acquire(blocking=False):
+            return
         _NARRATIVE_INFLIGHT.add(key)
-    threading.Thread(target=_run_narrative, args=(key, system, user),
-                     name="match-narrative", daemon=True).start()
+    try:
+        threading.Thread(target=_run_narrative, args=(key, system, user),
+                         name="match-narrative", daemon=True).start()
+    except Exception:  # noqa: BLE001
+        # A failed thread start must not hold the slot or the in-flight marker.
+        with _NARRATIVE_LOCK:
+            _NARRATIVE_INFLIGHT.discard(key)
+        _NARRATIVE_SLOTS.release()
+        log.exception("Could not start the narrative worker")
 
 
 def compute_match(job: Job, profile: UserProfile | None, use_ai: bool = True, lang: str = "en",

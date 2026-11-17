@@ -1,3 +1,5 @@
+from threading import Lock
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -13,21 +15,46 @@ from .auth import get_current_profile
 
 router = APIRouter(prefix="/api/assistant", tags=["assistant"])
 
+# One generation per profile at a time. Each CV or letter costs provider quota and a
+# worker thread for its whole timeout; a double submit (or a stuck client retrying)
+# used to pay for both. The second call is told to wait instead of starting a copy.
+_GENERATION_BUSY: set[int] = set()
+_GENERATION_LOCK = Lock()
+
+
+def _claim_generation(profile_id: int) -> bool:
+    with _GENERATION_LOCK:
+        if profile_id in _GENERATION_BUSY:
+            return False
+        _GENERATION_BUSY.add(profile_id)
+        return True
+
+
+def _release_generation(profile_id: int) -> None:
+    with _GENERATION_LOCK:
+        _GENERATION_BUSY.discard(profile_id)
+
 
 @router.post("/generate", response_model=GenerationResult)
 def generate(req: GenerationRequest, db: Session = Depends(get_db), profile: UserProfile = Depends(get_current_profile)):
     if req.kind not in GENERATION_KINDS:
         raise HTTPException(status_code=422, detail=f"Unknown kind. Choose from: {', '.join(GENERATION_KINDS)}")
-    job = get_job_or_404(db, req.job_id, profile.id)
-    result = generate_material(db, job, profile, req.kind, req.extra_notes)
-    # A draft for a job he already tracks belongs to that application, so the tracker
-    # can show everything prepared for it.
-    tracked = db.query(Application).filter(Application.job_id == job.id).first()
-    db.add(GeneratedMaterial(job_id=job.id, application_id=tracked.id if tracked else None,
-                             kind=req.kind, content=result["content"],
-                             template_based=result["template_based"]))
-    db.commit()
-    return result
+    if not _claim_generation(profile.id):
+        raise HTTPException(status_code=409, detail="A generation is already running. Wait a moment.",
+                            headers={"Retry-After": "5"})
+    try:
+        job = get_job_or_404(db, req.job_id, profile.id)
+        result = generate_material(db, job, profile, req.kind, req.extra_notes)
+        # A draft for a job he already tracks belongs to that application, so the tracker
+        # can show everything prepared for it.
+        tracked = db.query(Application).filter(Application.job_id == job.id).first()
+        db.add(GeneratedMaterial(job_id=job.id, application_id=tracked.id if tracked else None,
+                                 kind=req.kind, content=result["content"],
+                                 template_based=result["template_based"]))
+        db.commit()
+        return result
+    finally:
+        _release_generation(profile.id)
 
 
 @router.get("/cv/{job_id}/pdf")
